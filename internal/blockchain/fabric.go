@@ -1,0 +1,169 @@
+package blockchain
+
+import (
+	"crypto/x509"
+	"encoding/pem"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"time"
+
+	"go-blockchain-api/internal/models"
+
+	"github.com/google/uuid"
+	"github.com/hyperledger/fabric-gateway/pkg/client"
+	"github.com/hyperledger/fabric-gateway/pkg/identity"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"gorm.io/gorm"
+)
+
+type FabricService struct {
+	Contract *client.Contract
+	gw       *client.Gateway
+	conn     *grpc.ClientConn
+	DB       *gorm.DB
+}
+
+// InitFabricGateway menginisialisasi koneksi ke jaringan Fabric [cite: 215]
+func InitFabricGateway(db *gorm.DB) (*FabricService, error) {
+	mspID := os.Getenv("FABRIC_MSP_ID")
+	peerEndpoint := os.Getenv("FABRIC_PEER_ENDPOINT")
+
+	// 1. Load TLS Certificate untuk keamanan jalur gRPC
+	tlsCertPath := os.Getenv("FABRIC_TLS_CERT_PATH")
+	certPool := x509.NewCertPool()
+	tlsCert, err := os.ReadFile(filepath.Clean(tlsCertPath))
+	if err != nil {
+		return nil, fmt.Errorf("gagal membaca TLS cert: %v", err)
+	}
+	certPool.AppendCertsFromPEM(tlsCert)
+	transportCredentials := credentials.NewClientTLSFromCert(certPool, "")
+
+	conn, err := grpc.Dial(peerEndpoint, grpc.WithTransportCredentials(transportCredentials))
+	if err != nil {
+		return nil, fmt.Errorf("gagal membuat koneksi gRPC: %v", err)
+	}
+
+	// 2. Load Public Certificate (Identitas Node/Admin)
+	certPath := os.Getenv("FABRIC_CERT_PATH")
+	certBytes, err := os.ReadFile(filepath.Clean(certPath))
+	if err != nil {
+		return nil, fmt.Errorf("gagal membaca sertifikat: %v", err)
+	}
+	certBlock, _ := pem.Decode(certBytes)
+	cert, err := x509.ParseCertificate(certBlock.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("gagal parsing sertifikat: %v", err)
+	}
+	id, err := identity.NewX509Identity(mspID, cert)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Load Private Key untuk Digital Signature (Tanda Tangan)
+	keyPath := os.Getenv("FABRIC_KEY_PATH")
+	keyBytes, err := os.ReadFile(filepath.Clean(keyPath))
+	if err != nil {
+		return nil, fmt.Errorf("gagal membaca private key: %v", err)
+	}
+	keyBlock, _ := pem.Decode(keyBytes)
+	privateKey, err := x509.ParsePKCS8PrivateKey(keyBlock.Bytes)
+	if err != nil {
+		privateKey, err = x509.ParseECPrivateKey(keyBlock.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("gagal parsing private key: %v", err)
+		}
+	}
+	sign, err := identity.NewPrivateKeySign(privateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. Buat Koneksi Gateway
+	gw, err := client.Connect(
+		id,
+		client.WithSign(sign),
+		client.WithClientConnection(conn),
+		client.WithEvaluateTimeout(5*time.Second),
+		client.WithEndorseTimeout(15*time.Second),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	network := gw.GetNetwork(os.Getenv("FABRIC_CHANNEL"))
+	contract := network.GetContract(os.Getenv("FABRIC_CHAINCODE"))
+
+	log.Println("✅ Terhubung ke Hyperledger Fabric Gateway!")
+
+	return &FabricService{
+		Contract: contract,
+		gw:       gw,
+		conn:     conn,
+		DB:       db,
+	}, nil
+}
+
+// AnchorPendingRoots mencari Merkle Root yang belum di-anchor dan mengirimnya ke Blockchain [cite: 221-224]
+func (f *FabricService) AnchorPendingRoots() error {
+	// Cari Merkle Root yang unik dari log berstatus AGGREGATED
+	var distinctRoots []string
+	f.DB.Model(&models.AuditLog{}).Where("status = ?", "AGGREGATED").Distinct("merkle_root").Pluck("merkle_root", &distinctRoots)
+
+	if len(distinctRoots) == 0 {
+		return nil // Tidak ada Merkle Root baru untuk dikirim
+	}
+
+	for _, root := range distinctRoots {
+		// Ambil metadata batch untuk Merkle Root ini
+		var meta models.MerkleMetadata
+		if err := f.DB.Where("merkle_root = ?", root).First(&meta).Error; err != nil {
+			continue
+		}
+
+		// Siapkan payload sesuai spesifikasi skripsi [cite: 218-220]
+		anchorID := uuid.New().String()
+		timestamp := time.Now().Format(time.RFC3339)
+		sourceGateway := "AuditChain_Gateway_Node1"
+		batchSizeStr := fmt.Sprintf("%d", meta.BatchSize)
+
+		log.Printf("[Anchoring] Mengirim Merkle Root %s ke Fabric...", root)
+
+		// Submit Transaksi ke Chaincode (Smart Contract) [cite: 216-217]
+		// Asumsi chaincode function bernama "StoreMerkleRoot"
+		_, err := f.Contract.SubmitTransaction("StoreMerkleRoot", anchorID, root, timestamp, sourceGateway, batchSizeStr, "System_Signature")
+
+		if err != nil {
+			log.Printf("[Anchoring] ❌ Gagal mengirim ke Fabric untuk Root %s: %v\n", root, err)
+			continue // Mekanisme retry sederhana: lewati dan coba lagi di siklus berikutnya [cite: 224]
+		}
+
+		// Karena SDK Gateway v1.x mengabstraksi TxID, kita gunakan anchorID sebagai representasi transaksi (atau modifikasi chaincode untuk me-return TxID asli)
+		blockchainTxID := anchorID
+
+		// Update database: Tandai log sebagai ANCHORED dan simpan TxID
+		err = f.DB.Model(&models.AuditLog{}).
+			Where("merkle_root = ?", root).
+			Updates(map[string]interface{}{
+				"status":           "ANCHORED",
+				"blockchain_tx_id": blockchainTxID,
+			}).Error
+
+		if err == nil {
+			log.Printf("[Anchoring] ✅ Sukses Anchoring! Root: %s | TxID: %s", root, blockchainTxID)
+		}
+	}
+
+	return nil
+}
+
+func (f *FabricService) Close() {
+	if f.gw != nil {
+		f.gw.Close()
+	}
+	if f.conn != nil {
+		f.conn.Close()
+	}
+}
