@@ -3,8 +3,10 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 
+	"go-blockchain-api/internal/api/auth"
 	"go-blockchain-api/internal/api/dashboard"
 	"go-blockchain-api/internal/api/ingestion"
+	"go-blockchain-api/internal/middleware"
 )
 
 // SetupRouter bertugas merakit semua rute URL dan mengembalikan instance server Gin
@@ -17,6 +19,7 @@ func SetupRouter(ingestionHandler *ingestion.Handler, dashboardHandler *dashboar
 	// ==========================================
 	// GRUP 1: INGESTION API (Sistem Eksternal)
 	// ==========================================
+	router.POST("/api/auth/login", auth.Login)
 	apiV1 := router.Group("/api/v1")
 	{
 		// Endpoint ini terbuka untuk menerima log dari sistem lain
@@ -27,6 +30,7 @@ func SetupRouter(ingestionHandler *ingestion.Handler, dashboardHandler *dashboar
 	// GRUP 2: DASHBOARD API (UI/Frontend)
 	// ==========================================
 	dashAPI := router.Group("/api/dashboard")
+	dashAPI.Use(middleware.JWTAuth())
 	{
 		// Nanti, Middleware JWT akan kita pasang khusus di grup ini
 

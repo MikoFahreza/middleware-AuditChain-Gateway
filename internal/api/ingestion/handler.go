@@ -60,7 +60,7 @@ func (h *Handler) ReceiveLog(c *gin.Context) {
 	if err := h.DB.Create(standardLog).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Gagal menyimpan log ke database internal",
-			"details": err.Error(), // Saya tambahkan ini agar error dari GORM langsung terlihat di Postman
+			"details": err.Error(),
 		})
 		return
 	}
