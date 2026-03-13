@@ -5,10 +5,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 
+	"go-blockchain-api/internal/api"
 	"go-blockchain-api/internal/api/dashboard"
 	"go-blockchain-api/internal/api/ingestion"
 	"go-blockchain-api/internal/blockchain"
@@ -22,11 +22,7 @@ func startPipelineWorker(db *gorm.DB) {
 	hashEngine := &hasher.HasherEngine{DB: db}
 	aggEngine := &aggregator.AggregatorEngine{DB: db}
 
-	fabricSvc, err := blockchain.InitFabricGateway(db)
-	if err != nil {
-		log.Printf("⚠️ Peringatan: Gagal terhubung ke Fabric Gateway. Anchoring di-bypass.\n")
-	}
-
+	// fabricSvc is now initialized in main and passed as argument
 	ticker := time.NewTicker(10 * time.Second)
 
 	go func() {
@@ -34,9 +30,6 @@ func startPipelineWorker(db *gorm.DB) {
 		for range ticker.C {
 			hashEngine.ProcessPendingLogs()
 			aggEngine.ProcessBatch(5)
-			if fabricSvc != nil {
-				fabricSvc.AnchorPendingRoots()
-			}
 		}
 	}()
 }
@@ -49,36 +42,34 @@ func main() {
 	}
 
 	db := config.ConnectDB()
+
+	// Initialize Fabric Gateway
+	fabricSvc, err := blockchain.InitFabricGateway(db)
+	if err != nil {
+		log.Printf("⚠️ Peringatan: Gagal terhubung ke Fabric Gateway. Anchoring di-bypass.\n")
+		fabricSvc = nil
+	}
+
 	startPipelineWorker(db)
 
 	// 1. Inisialisasi Repository [BARU]
 	auditRepo := repository.NewAuditRepository(db)
-
-	// 2. Inject Repository ke Handler Dashboard (Ingestion sementara tetap pakai DB langsung atau bisa diubah nanti)
 	ingestionHandler := &ingestion.Handler{DB: db}
-	dashboardHandler := &dashboard.Handler{Repo: auditRepo} // [UPDATE]
-
-	router := gin.Default()
-
-	// --- ROUTING GRUP INGESTION ---
-	apiV1 := router.Group("/api/v1")
-	{
-		apiV1.POST("/logs", ingestionHandler.ReceiveLog)
+	dashboardHandler := &dashboard.Handler{
+		Repo:   auditRepo,
+		Fabric: fabricSvc,
 	}
 
-	// --- ROUTING GRUP DASHBOARD ---
-	dashAPI := router.Group("/api/dashboard")
-	{
-		dashAPI.GET("/stats", dashboardHandler.GetStats)
-		// Endpoint Baru untuk Audit Verifikasi [BARU]
-		dashAPI.GET("/verify/:hash", dashboardHandler.VerifyLog)
-	}
+	// --- [UPDATE] PANGGIL ROUTER YANG SUDAH DIPISAH ---
+	// Kita import dari folder "go-blockchain-api/internal/api"
+	router := api.SetupRouter(ingestionHandler, dashboardHandler)
 
+	// Gunakan PORT dari .env
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "3000"
 	}
 
-	log.Printf("🚀 AuditChain Gateway berjalan di port %s...\n", port)
+	log.Printf("🚀 AuditChain Gateway API berjalan di port %s...\n", port)
 	router.Run(":" + port)
 }
