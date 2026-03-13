@@ -5,11 +5,15 @@ import (
 	"go-blockchain-api/pkg/crypto"
 	"net/http"
 
+	"encoding/json"
+	"go-blockchain-api/internal/blockchain"
+
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
-	Repo repository.AuditRepository
+	Repo   repository.AuditRepository
+	Fabric *blockchain.FabricService
 }
 
 func (h *Handler) GetStats(c *gin.Context) {
@@ -59,5 +63,36 @@ func (h *Handler) VerifyLog(c *gin.Context) {
 		"is_valid":         isValid,
 		"proof_path":       siblingHashes,
 		"message":          "Verifikasi selesai",
+	})
+}
+
+func (h *Handler) GetFabricRecord(c *gin.Context) {
+	anchorID := c.Param("anchor_id")
+
+	// 1. Cek apakah koneksi Fabric tersedia
+	if h.Fabric == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "Koneksi ke jaringan Hyperledger Fabric sedang terputus (Bypass Mode)",
+		})
+		return
+	}
+
+	// 2. Tarik data dari Blockchain menggunakan fungsi yang baru kita buat
+	fabricDataString, err := h.Fabric.GetAnchorFromLedger(anchorID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Data tidak ditemukan di dalam Ledger Fabric",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// 3. Ubah string JSON dari Fabric kembali menjadi objek agar rapi saat ditampilkan
+	var jsonResponse map[string]interface{}
+	json.Unmarshal([]byte(fabricDataString), &jsonResponse)
+
+	c.JSON(http.StatusOK, gin.H{
+		"source": "Hyperledger Fabric World State",
+		"data":   jsonResponse,
 	})
 }

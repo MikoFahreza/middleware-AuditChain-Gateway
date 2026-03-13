@@ -159,6 +159,17 @@ func (f *FabricService) AnchorPendingRoots() error {
 	return nil
 }
 
+// GetAnchorFromLedger menarik data Merkle Root asli yang tersimpan di dalam jaringan Fabric
+func (f *FabricService) GetAnchorFromLedger(anchorID string) (string, error) {
+	// Catatan: Kita menggunakan EvaluateTransaction, bukan SubmitTransaction
+	resultBytes, err := f.Contract.EvaluateTransaction("QueryMerkleRoot", anchorID)
+	if err != nil {
+		return "", err
+	}
+
+	return string(resultBytes), nil
+}
+
 func (f *FabricService) Close() {
 	if f.gw != nil {
 		f.gw.Close()
