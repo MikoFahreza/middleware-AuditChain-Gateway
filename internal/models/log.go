@@ -14,11 +14,11 @@ type AuditLog struct {
 	Metadata             string    `gorm:"type:jsonb" json:"metadata"` // Tambahan untuk fleksibilitas JSON
 
 	// Elemen Kriptografi & Blockchain
-	HashValue      string `gorm:"type:varchar(64);uniqueIndex" json:"hash_value"`
-	PreviousHash   string `gorm:"type:varchar(64)" json:"previous_hash"`             // Untuk Contextual Hashing rantai [cite: 168]
-	MerkleRoot     string `gorm:"type:varchar(64);index" json:"merkle_root"`         // Nullable awalnya, diisi oleh Aggregator [cite: 196]
-	BlockchainTxID string `gorm:"type:varchar(100)" json:"blockchain_tx_id"`         // Diisi setelah sukses ke Fabric [cite: 222-223]
-	Status         string `gorm:"type:varchar(20);default:'RECEIVED'" json:"status"` // RECEIVED -> HASHED -> ANCHORED
+	HashValue      string  `gorm:"type:varchar(64);uniqueIndex" json:"hash_value"`
+	PreviousHash   string  `gorm:"type:varchar(64)" json:"previous_hash"`             // Untuk Contextual Hashing rantai [cite: 168]
+	MerkleRoot     string  `gorm:"type:varchar(64);index" json:"merkle_root"`         // Nullable awalnya, diisi oleh Aggregator [cite: 196]
+	BlockchainTxID *string `gorm:"type:varchar(100)" json:"blockchain_tx_id"`         // Diisi setelah sukses ke Fabric [cite: 222-223]
+	Status         string  `gorm:"type:varchar(20);default:'RECEIVED'" json:"status"` // RECEIVED -> HASHED -> ANCHORED
 }
 
 // 2. MerkleMetadata menyimpan informasi setiap batch yang di-hash ke Root [cite: 241-242]
