@@ -13,9 +13,6 @@ type HasherEngine struct {
 	DB *gorm.DB
 }
 
-// ----------------------------------------------------------------------
-// [FUNGSI BARU] Diekstrak agar bisa dipakai ulang oleh modul Verifikasi
-// ----------------------------------------------------------------------
 func GenerateLogHash(auditLog *models.AuditLog, prevHash string) string {
 	// Serialisasi Data Secara Deterministik
 	contextString := fmt.Sprintf("%s|%s|%s|%s|%d|%s|%s|%s|%s",
@@ -30,7 +27,6 @@ func GenerateLogHash(auditLog *models.AuditLog, prevHash string) string {
 		auditLog.Metadata,
 	)
 
-	// Generate SHA3-256 Hash
 	return crypto.GenerateSHA3_256(contextString)
 }
 
@@ -57,9 +53,6 @@ func (h *HasherEngine) ProcessPendingLogs() error {
 			prevHash = "GENESIS_00000000000000000000000000000000000000000000000000000000"
 		}
 
-		// ----------------------------------------------------------------------
-		// [UBAH] Panggil fungsi publik yang baru dibuat
-		// ----------------------------------------------------------------------
 		hashValue := GenerateLogHash(&auditLog, prevHash)
 
 		auditLog.HashValue = hashValue
