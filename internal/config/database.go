@@ -25,6 +25,7 @@ func ConnectDB() *gorm.DB {
 		&models.AuditLog{},
 		&models.MerkleMetadata{},
 		&models.MerkleProof{},
+		&models.User{},
 	)
 	if err != nil {
 		log.Fatalf("Gagal melakukan migrasi database: %v", err)

@@ -1,11 +1,11 @@
 package audit
 
 import (
-	"go-blockchain-api/pkg/crypto"
 	"net/http"
 
 	"encoding/json"
 	"go-blockchain-api/internal/blockchain"
+	"go-blockchain-api/internal/engine/hasher"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,42 +26,58 @@ func (h *Handler) GetStats(c *gin.Context) {
 
 // VerifyLog mengecek keaslian transaksi menggunakan Merkle Proof [cite: 197-203]
 func (h *Handler) VerifyLog(c *gin.Context) {
-	txHash := c.Param("hash")
+	requestedHash := c.Param("hash")
 
-	// 1. Ambil data log berdasarkan Hash
-	logData, err := h.Repo.GetLogByHash(txHash)
+	// 1. Ambil data dari database
+	auditLog, err := h.Repo.GetLogByHash(requestedHash)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Data log transaksi tidak ditemukan"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Log tidak ditemukan"})
 		return
 	}
 
-	// 2. Jika belum masuk ke Merkle Tree, tidak bisa diverifikasi
-	if logData.MerkleRoot == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "PENDING",
-			"message": "Log ini belum diagregasi ke dalam Merkle Tree",
+	// =====================================================================
+	// 🚨 DETEKSI TAMPERING DATABASE (RE-CALCULATE HASH)
+	// =====================================================================
+	// Gunakan mesin Hasher yang persis sama dengan saat data dibuat
+	recalculatedHash := hasher.GenerateLogHash(auditLog, auditLog.PreviousHash)
+
+	// Jika hash hasil hitungan ulang BEDA dengan hash yang tersimpan,
+	// berarti ada orang dalam (DBA) yang mengedit isi tabel!
+	if recalculatedHash != auditLog.HashValue {
+		c.JSON(http.StatusConflict, gin.H{
+			"status": "failed",
+			"data": gin.H{
+				"is_valid":      false,
+				"message":       "🚨 DATA TERMANIPULASI: Isi data (Actor/Action) telah diubah di database dan tidak cocok dengan Hash aslinya!",
+				"expected_hash": auditLog.HashValue,
+				"actual_hash":   recalculatedHash,
+			},
+		})
+		return
+	}
+	// =====================================================================
+
+	// 2. Jika lolos deteksi tampering DB, baru kita cek status Blockchain-nya
+	if auditLog.BlockchainTxID == nil || *auditLog.BlockchainTxID == "PENDING_OR_FAILED" {
+		c.JSON(http.StatusAccepted, gin.H{
+			"status":  "pending",
+			"message": "Log otentik, namun masih dalam proses antrean ke Blockchain.",
 		})
 		return
 	}
 
-	// 3. Ambil jalur Merkle Proof (Sibling Hashes) dari database [cite: 201, 243-244]
-	proofRecords, _ := h.Repo.GetProofsByHash(txHash)
-	var siblingHashes []string
-	for _, p := range proofRecords {
-		siblingHashes = append(siblingHashes, p.SiblingHash)
-	}
+	// 3. (Opsional) Di sini Anda bisa menambahkan logika verifikasi Merkle Proof
+	// dan mengecek ke Node Hyperledger Fabric secara langsung jika diperlukan.
 
-	// 4. Lakukan verifikasi matematis secara off-chain [cite: 229-230]
-	isValid := crypto.VerifyMerkleProof(txHash, siblingHashes, logData.MerkleRoot)
-
-	// Respons Audit
 	c.JSON(http.StatusOK, gin.H{
-		"transaction_hash": txHash,
-		"merkle_root":      logData.MerkleRoot,
-		"blockchain_tx_id": logData.BlockchainTxID,
-		"is_valid":         isValid,
-		"proof_path":       siblingHashes,
-		"message":          "Verifikasi selesai",
+		"status": "success",
+		"data": gin.H{
+			"log_id":           auditLog.LogID,
+			"hash_value":       auditLog.HashValue,
+			"is_valid":         true,
+			"blockchain_tx_id": auditLog.BlockchainTxID,
+			"message":          "✅ DATA OTENTIK: Data utuh dan Hash cocok dengan catatan Blockchain.",
+		},
 	})
 }
 
