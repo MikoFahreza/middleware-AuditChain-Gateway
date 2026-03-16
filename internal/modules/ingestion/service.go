@@ -2,14 +2,14 @@ package ingestion
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"go-blockchain-api/internal/engine/normalizer"
 	"go-blockchain-api/internal/models"
+	"go-blockchain-api/pkg/crypto"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -32,8 +32,7 @@ func (s *Service) ProcessLog(input normalizer.RawLogInput) (*models.AuditLog, er
 	timestampNano := time.Now().UnixNano()
 	uniqueRawString := fmt.Sprintf("%s-%s-%d", standardLog.HashValue, uniqueID, timestampNano)
 
-	hashBytes := sha256.Sum256([]byte(uniqueRawString))
-	standardLog.HashValue = hex.EncodeToString(hashBytes[:])
+	standardLog.HashValue = crypto.GenerateSHA3_256(uniqueRawString)
 
 	// 3. Simpan ke Redis Queue
 	logJSON, _ := json.Marshal(standardLog)
