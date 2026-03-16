@@ -1,3 +1,18 @@
+// @title AuditChain Gateway API
+// @version 1.0
+// @description API Enterprise untuk sistem audit log berbasis Blockchain dan Merkle Tree.
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.email support@auditchain.local
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Masukkan token dengan format: Bearer {token}
+
+// @host localhost:3000
+// @BasePath /api
 package main
 
 import (

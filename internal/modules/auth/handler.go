@@ -60,6 +60,16 @@ func (h *Handler) Register(c *gin.Context) {
 }
 
 // Login memverifikasi user dari database dan mencetak JWT
+// @Summary Login Auditor
+// @Description Mengotentikasi user dan mengembalikan JWT Token untuk akses Dashboard
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body AuthRequest true "Kredensial Login"
+// @Success 200 {object} map[string]interface{} "Berhasil Login"
+// @Failure 400 {object} map[string]interface{} "Format tidak valid"
+// @Failure 401 {object} map[string]interface{} "Username/Password salah"
+// @Router /auth/login [post]
 func (h *Handler) Login(c *gin.Context) {
 	var req AuthRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

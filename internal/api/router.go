@@ -5,6 +5,11 @@ import (
 	"go-blockchain-api/internal/modules/auth"
 	"go-blockchain-api/internal/modules/ingestion"
 
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+
+	_ "go-blockchain-api/docs"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -15,7 +20,7 @@ func SetupRouter(
 ) *gin.Engine {
 
 	router := gin.Default()
-
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	apiGroup := router.Group("/api")
 	auth.RegisterRoutes(apiGroup, authHandler)
 	apiV1 := apiGroup.Group("/v1")

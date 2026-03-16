@@ -1,0 +1,64 @@
+basePath: /api
+definitions:
+  auth.AuthRequest:
+    properties:
+      password:
+        minLength: 6
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+host: localhost:3000
+info:
+  contact:
+    email: support@auditchain.local
+    name: API Support
+  description: API Enterprise untuk sistem audit log berbasis Blockchain dan Merkle
+    Tree.
+  termsOfService: http://swagger.io/terms/
+  title: AuditChain Gateway API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Mengotentikasi user dan mengembalikan JWT Token untuk akses Dashboard
+      parameters:
+      - description: Kredensial Login
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.AuthRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Berhasil Login
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Format tidak valid
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Username/Password salah
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Login Auditor
+      tags:
+      - Authentication
+securityDefinitions:
+  BearerAuth:
+    description: 'Masukkan token dengan format: Bearer {token}'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
