@@ -12,14 +12,14 @@ import (
 
 	// Pastikan import ini sesuai dengan nama module di go.mod Anda
 	"go-blockchain-api/internal/api"
-	"go-blockchain-api/internal/api/dashboard"
-	"go-blockchain-api/internal/api/ingestion"
 	"go-blockchain-api/internal/blockchain"
 	"go-blockchain-api/internal/config"
 	"go-blockchain-api/internal/engine/aggregator"
 	"go-blockchain-api/internal/engine/hasher"
 	"go-blockchain-api/internal/models"
-	"go-blockchain-api/internal/repository"
+	"go-blockchain-api/internal/modules/audit"
+	"go-blockchain-api/internal/modules/auth"
+	"go-blockchain-api/internal/modules/ingestion"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -103,15 +103,18 @@ func main() {
 	startPipelineWorker(db, fabricSvc, redisClient)
 
 	// 5. Inisialisasi Repository & Handler
-	auditRepo := repository.NewAuditRepository(db)
-	ingestionHandler := &ingestion.Handler{Redis: redisClient}
-	dashboardHandler := &dashboard.Handler{
+	auditRepo := audit.NewAuditRepository(db)
+	authHandler := &auth.Handler{DB: db}
+	ingestionService := &ingestion.Service{Redis: redisClient}
+	ingestionHandler := &ingestion.Handler{Service: ingestionService}
+
+	auditHandler := &audit.Handler{
 		Repo:   auditRepo,
 		Fabric: fabricSvc,
 	}
 
 	// 6. Pasang Router yang sudah kita pisahkan ke folder api/
-	router := api.SetupRouter(ingestionHandler, dashboardHandler)
+	router := api.SetupRouter(ingestionHandler, auditHandler, authHandler)
 
 	// 7. Jalankan Server API
 	port := os.Getenv("PORT")

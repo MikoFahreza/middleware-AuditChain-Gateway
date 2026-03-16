@@ -1,7 +1,6 @@
-package dashboard
+package audit
 
 import (
-	"go-blockchain-api/internal/repository"
 	"go-blockchain-api/pkg/crypto"
 	"net/http"
 
@@ -12,7 +11,7 @@ import (
 )
 
 type Handler struct {
-	Repo   repository.AuditRepository
+	Repo   AuditRepository
 	Fabric *blockchain.FabricService
 }
 

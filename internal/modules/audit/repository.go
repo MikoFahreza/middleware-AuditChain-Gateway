@@ -1,4 +1,4 @@
-package repository
+package audit
 
 import (
 	"go-blockchain-api/internal/models"
@@ -6,7 +6,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// AuditRepository adalah interface/kontrak yang mendefinisikan apa saja yang bisa dilakukan ke database
+// Repository adalah interface/kontrak yang mendefinisikan apa saja yang bisa dilakukan ke database
 type AuditRepository interface {
 	CreateLog(log *models.AuditLog) error
 	GetLogByHash(hash string) (*models.AuditLog, error)

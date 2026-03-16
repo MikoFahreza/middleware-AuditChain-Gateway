@@ -1,43 +1,26 @@
 package api
 
 import (
-	"github.com/gin-gonic/gin"
+	"go-blockchain-api/internal/modules/audit"
+	"go-blockchain-api/internal/modules/auth"
+	"go-blockchain-api/internal/modules/ingestion"
 
-	"go-blockchain-api/internal/api/auth"
-	"go-blockchain-api/internal/api/dashboard"
-	"go-blockchain-api/internal/api/ingestion"
-	"go-blockchain-api/internal/middleware"
+	"github.com/gin-gonic/gin"
 )
 
-// SetupRouter bertugas merakit semua rute URL dan mengembalikan instance server Gin
-func SetupRouter(ingestionHandler *ingestion.Handler, dashboardHandler *dashboard.Handler) *gin.Engine {
-	// Inisialisasi Gin dengan default middleware (Logger & Recovery)
+func SetupRouter(
+	ingestionHandler *ingestion.Handler,
+	auditHandler *audit.Handler,
+	authHandler *auth.Handler,
+) *gin.Engine {
+
 	router := gin.Default()
 
-	// Nanti, Middleware Global (seperti CORS) bisa ditaruh di sini
-
-	// ==========================================
-	// GRUP 1: INGESTION API (Sistem Eksternal)
-	// ==========================================
-	router.POST("/api/auth/login", auth.Login)
-	apiV1 := router.Group("/api/v1")
-	{
-		// Endpoint ini terbuka untuk menerima log dari sistem lain
-		apiV1.POST("/logs", ingestionHandler.ReceiveLog)
-	}
-
-	// ==========================================
-	// GRUP 2: DASHBOARD API (UI/Frontend)
-	// ==========================================
-	dashAPI := router.Group("/api/dashboard")
-	dashAPI.Use(middleware.JWTAuth())
-	{
-		// Nanti, Middleware JWT akan kita pasang khusus di grup ini
-
-		dashAPI.GET("/stats", dashboardHandler.GetStats)
-		dashAPI.GET("/verify/:hash", dashboardHandler.VerifyLog)
-		dashAPI.GET("/fabric/:anchor_id", dashboardHandler.GetFabricRecord)
-	}
+	apiGroup := router.Group("/api")
+	auth.RegisterRoutes(apiGroup, authHandler)
+	apiV1 := apiGroup.Group("/v1")
+	ingestion.RegisterRoutes(apiV1, ingestionHandler)
+	audit.RegisterRoutes(apiGroup, auditHandler)
 
 	return router
 }
