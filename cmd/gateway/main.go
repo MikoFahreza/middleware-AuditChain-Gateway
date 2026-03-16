@@ -30,50 +30,52 @@ func startPipelineWorker(db *gorm.DB, fabricSvc *blockchain.FabricService, redis
 	aggEngine := &aggregator.AggregatorEngine{DB: db}
 	ctx := context.Background()
 
-	ticker := time.NewTicker(10 * time.Second)
-
 	go func() {
 		log.Println("⚙️ Background Pipeline Worker mulai berjalan...")
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			// [Langkah 2 & 3 & 4 tetap sama: Proses log yang sudah ada di DB]
+			hashEngine.ProcessPendingLogs()
+			aggEngine.ProcessBatch(5)
+			if fabricSvc != nil {
+				fabricSvc.AnchorPendingRoots()
+			}
+		}
+	}()
+
+	if redisClient == nil {
+		return
+	}
+
+	go func() {
+		log.Println("📥 Redis Queue Worker mulai berjalan...")
 		for {
-			select {
-			case <-ticker.C:
-				// [Langkah 2 & 3 & 4 tetap sama: Proses log yang sudah ada di DB]
-				hashEngine.ProcessPendingLogs()
-				aggEngine.ProcessBatch(5)
-				if fabricSvc != nil {
-					fabricSvc.AnchorPendingRoots()
-				}
+			// BLPop akan menunggu sampai ada item baru, sehingga worker tidak perlu polling tiap 1 detik.
+			result, err := redisClient.BLPop(ctx, 0, "audit_log_queue").Result()
+			if err != nil {
+				log.Printf("⚠️ Error membaca dari Redis: %v\n", err)
+				time.Sleep(1 * time.Second)
+				continue
+			}
 
-			default:
-				// ------------------------------------------------------------------
-				// [LANGKAH 1 BARU] Sedot dari Redis terus-menerus
-				// ------------------------------------------------------------------
-				if redisClient != nil {
-					// Ambil data paling depan (Left Pop / LPOP)
-					result, err := redisClient.LPop(ctx, "audit_log_queue").Result()
+			if len(result) < 2 {
+				continue
+			}
 
-					// Jika antrean kosong (redis.Nil), diam sejenak agar CPU tidak meledak
-					if err == redis.Nil {
-						time.Sleep(1 * time.Second)
-						continue
-					} else if err != nil {
-						log.Printf("⚠️ Error membaca dari Redis: %v\n", err)
-						time.Sleep(1 * time.Second)
-						continue
-					}
+			// Jika ada data, kembalikan dari JSON menjadi Struct
+			var logData models.AuditLog
+			if err := json.Unmarshal([]byte(result[1]), &logData); err != nil {
+				log.Printf("⚠️ Gagal parse log dari Redis: %v\n", err)
+				continue
+			}
 
-					// Jika ada data, kembalikan dari JSON menjadi Struct
-					var logData models.AuditLog
-					json.Unmarshal([]byte(result), &logData)
-
-					// Simpan ke PostgreSQL
-					if err := db.Create(&logData).Error; err != nil {
-						log.Printf("⚠️ Gagal memindah log %s dari Redis ke PostgreSQL: %v\n", logData.HashValue, err)
-					} else {
-						log.Printf("📥 Memindahkan log %s dari Redis ke Database\n", logData.HashValue)
-					}
-				}
-				// ------------------------------------------------------------------
+			// Simpan ke PostgreSQL
+			if err := db.Create(&logData).Error; err != nil {
+				log.Printf("⚠️ Gagal memindah log %s dari Redis ke PostgreSQL: %v\n", logData.HashValue, err)
+			} else {
+				log.Printf("📥 Memindahkan log %s dari Redis ke Database\n", logData.HashValue)
 			}
 		}
 	}()
