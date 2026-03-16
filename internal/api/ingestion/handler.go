@@ -1,8 +1,10 @@
 package ingestion
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -11,65 +13,56 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
+	"github.com/redis/go-redis/v9"
 )
 
 type Handler struct {
-	DB *gorm.DB
+	Redis *redis.Client
 }
 
-// ReceiveLog adalah endpoint POST /logs untuk menerima log transaksi
 func (h *Handler) ReceiveLog(c *gin.Context) {
 	var input normalizer.RawLogInput
 
 	// 1. Terima dan binding JSON dari request body
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Format JSON tidak valid atau ada field wajib yang hilang",
-			"details": err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Format JSON tidak valid"})
 		return
 	}
 
-	// 2. Kirim ke Normalization Engine
+	// 2. Normalisasi
 	standardLog, err := normalizer.Normalize(input)
 	if err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{
-			"error":   "Gagal menormalisasi log",
-			"details": err.Error(),
-		})
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Gagal menormalisasi log"})
 		return
 	}
 
-	// ----------------------------------------------------------------------
-	// [BARU] INJEKSI ANTI-DUPLICATE (DETERMINISM FIX)
-	// ----------------------------------------------------------------------
-	// Kita menimpa (override) hash dari normalizer dengan hash yang 100% unik
+	// 3. Injeksi Anti-Duplicate Hash (seperti sebelumnya)
 	uniqueID := uuid.New().String()
 	timestampNano := time.Now().UnixNano()
-
-	// Gabungkan hasil dari normalizer dengan UUID dan Timestamp
 	uniqueRawString := fmt.Sprintf("%s-%s-%d", standardLog.HashValue, uniqueID, timestampNano)
 
-	// Hitung ulang Hash SHA-256
 	hashBytes := sha256.Sum256([]byte(uniqueRawString))
 	standardLog.HashValue = hex.EncodeToString(hashBytes[:])
-	// ----------------------------------------------------------------------
 
-	// 3. Simpan sementara ke Buffer / Database dengan status 'RECEIVED'
-	if err := h.DB.Create(standardLog).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Gagal menyimpan log ke database internal",
-			"details": err.Error(),
-		})
+	// ----------------------------------------------------------------------
+	// [BARU] SIMPAN KE REDIS QUEUE, BUKAN KE POSTGRESQL
+	// ----------------------------------------------------------------------
+	// Ubah struct log menjadi JSON string agar bisa disimpan di Redis
+	logJSON, _ := json.Marshal(standardLog)
+
+	// Masukkan ke antrean paling belakang (Right Push / RPUSH)
+	ctx := context.Background()
+	err = h.Redis.RPush(ctx, "audit_log_queue", logJSON).Err()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memasukkan log ke antrean Redis"})
 		return
 	}
+	// ----------------------------------------------------------------------
 
-	// 4. Berikan respons sukses ke sistem eksternal
+	// 4. Berikan respons sukses (Jauh lebih cepat dari sebelumnya!)
 	c.JSON(http.StatusAccepted, gin.H{
-		"message":    "Log berhasil diterima dan sedang diproses dalam pipeline",
+		"message":    "Log berhasil masuk antrean Redis dan akan segera diproses",
 		"log_id":     standardLog.LogID,
-		"status":     standardLog.Status,
 		"hash_value": standardLog.HashValue,
 	})
 }
