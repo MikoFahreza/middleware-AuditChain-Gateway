@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"log"
 	"net/http"
 
 	"encoding/json"
@@ -83,27 +84,40 @@ func (h *Handler) VerifyLog(c *gin.Context) {
 		return
 	}
 
-	// 1. Buat struct sementara untuk menangkap JSON dari Chaincode
-	// PENTING: Sesuaikan tag `json:"..."` dengan definisi struct AnchorRecord di Chaincode Anda!
-	var fabricResponse struct {
-		MerkleRoot string `json:"merkleRoot"` // Cek apakah di Chaincode Anda namanya "merkleRoot", "merkle_root", atau "MerkleRoot"
-	}
+	// 🛠️ DEBUGGING: Cetak wujud asli JSON dari Fabric ke Terminal
+	log.Printf("📦 [DEBUG] RAW DATA DARI FABRIC: %s\n", onChainData)
 
-	// 2. Unmarshal JSON string dari Fabric ke struct sementara
-	importJSONErr := json.Unmarshal([]byte(onChainData), &fabricResponse)
-	if importJSONErr != nil {
+	// 1. Gunakan map dinamis (interface{}) agar kebal terhadap kesalahan nama struct
+	var fabricResponse map[string]interface{}
+	if err := json.Unmarshal([]byte(onChainData), &fabricResponse); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
-			"message": "Gagal membaca format data dari Blockchain.",
-			"detail":  importJSONErr.Error(),
+			"message": "Gagal membaca format JSON dari Blockchain.",
+			"detail":  err.Error(),
 		})
 		return
 	}
 
-	// 3. Ekstrak Root yang sudah bersih dari JSON
-	onChainRoot := fabricResponse.MerkleRoot
+	// 2. Ekstrak Root dengan mengecek berbagai kemungkinan nama Key JSON dari Chaincode Anda
+	var onChainRoot string
 
-	// 4. Bandingkan dengan Database
+	if root, exists := fabricResponse["merkle_root"]; exists {
+		onChainRoot = root.(string)
+	} else if root, exists := fabricResponse["merkleRoot"]; exists {
+		onChainRoot = root.(string)
+	} else if root, exists := fabricResponse["MerkleRoot"]; exists {
+		onChainRoot = root.(string)
+	} else {
+		// Jika masih tidak ketemu, kita tampilkan isi aslinya ke Postman agar Anda bisa menganalisisnya!
+		c.JSON(http.StatusConflict, gin.H{
+			"status":               "error",
+			"message":              "Key untuk Merkle Root tidak ditemukan di dalam JSON Fabric. Silakan cek raw_data di bawah.",
+			"raw_data_from_fabric": fabricResponse,
+		})
+		return
+	}
+
+	// 3. Bandingkan dengan Database
 	if onChainRoot != auditLog.MerkleRoot {
 		c.JSON(http.StatusConflict, gin.H{
 			"status": "failed",
@@ -111,7 +125,7 @@ func (h *Handler) VerifyLog(c *gin.Context) {
 				"is_valid":   false,
 				"message":    "🚨 FATAL MISMATCH: Merkle Root di database TIDAK DIAKUI oleh jaringan Blockchain!",
 				"db_root":    auditLog.MerkleRoot,
-				"chain_root": onChainRoot, // Sekarang ini akan mencetak hash-nya saja
+				"chain_root": onChainRoot,
 			},
 		})
 		return
