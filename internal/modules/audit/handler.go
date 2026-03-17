@@ -1,7 +1,6 @@
 package audit
 
 import (
-	"log"
 	"net/http"
 
 	"encoding/json"
@@ -71,9 +70,6 @@ func (h *Handler) VerifyLog(c *gin.Context) {
 		return
 	}
 
-	// -------------------------------------------------------------------------
-	// LAPIS 3: Verifikasi Konsensus ke Hyperledger Fabric (The Ultimate Truth)
-	// -------------------------------------------------------------------------
 	onChainData, err := h.Fabric.GetAnchorFromLedger(*auditLog.BlockchainTxID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -84,40 +80,27 @@ func (h *Handler) VerifyLog(c *gin.Context) {
 		return
 	}
 
-	// 🛠️ DEBUGGING: Cetak wujud asli JSON dari Fabric ke Terminal
-	log.Printf("📦 [DEBUG] RAW DATA DARI FABRIC: %s\n", onChainData)
+	var fabricResponse struct {
+		AnchorID      string `json:"anchor_id"`
+		BatchSize     string `json:"batch_size"`
+		MerkleRoot    string `json:"merkle_root"`
+		SignatureNode string `json:"signature_node"`
+		SourceGateway string `json:"source_gateway"`
+		Timestamp     string `json:"timestamp"`
+	}
 
-	// 1. Gunakan map dinamis (interface{}) agar kebal terhadap kesalahan nama struct
-	var fabricResponse map[string]interface{}
+	// 2. Unmarshal JSON string dari Fabric ke struct yang sudah pasti cocok
 	if err := json.Unmarshal([]byte(onChainData), &fabricResponse); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
-			"message": "Gagal membaca format JSON dari Blockchain.",
+			"message": "Gagal membaca format data dari Blockchain.",
 			"detail":  err.Error(),
 		})
 		return
 	}
 
-	// 2. Ekstrak Root dengan mengecek berbagai kemungkinan nama Key JSON dari Chaincode Anda
-	var onChainRoot string
+	onChainRoot := fabricResponse.MerkleRoot
 
-	if root, exists := fabricResponse["merkle_root"]; exists {
-		onChainRoot = root.(string)
-	} else if root, exists := fabricResponse["merkleRoot"]; exists {
-		onChainRoot = root.(string)
-	} else if root, exists := fabricResponse["MerkleRoot"]; exists {
-		onChainRoot = root.(string)
-	} else {
-		// Jika masih tidak ketemu, kita tampilkan isi aslinya ke Postman agar Anda bisa menganalisisnya!
-		c.JSON(http.StatusConflict, gin.H{
-			"status":               "error",
-			"message":              "Key untuk Merkle Root tidak ditemukan di dalam JSON Fabric. Silakan cek raw_data di bawah.",
-			"raw_data_from_fabric": fabricResponse,
-		})
-		return
-	}
-
-	// 3. Bandingkan dengan Database
 	if onChainRoot != auditLog.MerkleRoot {
 		c.JSON(http.StatusConflict, gin.H{
 			"status": "failed",
@@ -131,9 +114,6 @@ func (h *Handler) VerifyLog(c *gin.Context) {
 		return
 	}
 
-	// -------------------------------------------------------------------------
-	// LOLOS SEMUA UJIAN
-	// -------------------------------------------------------------------------
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data": gin.H{
