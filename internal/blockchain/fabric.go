@@ -41,7 +41,7 @@ func InitFabricGateway(db *gorm.DB) (*FabricService, error) {
 	certPool.AppendCertsFromPEM(tlsCert)
 	transportCredentials := credentials.NewClientTLSFromCert(certPool, "")
 
-	conn, err := grpc.Dial(peerEndpoint, grpc.WithTransportCredentials(transportCredentials))
+	conn, err := grpc.NewClient(peerEndpoint, grpc.WithTransportCredentials(transportCredentials))
 	if err != nil {
 		return nil, fmt.Errorf("gagal membuat koneksi gRPC: %v", err)
 	}
