@@ -57,7 +57,7 @@ func Normalize(input RawLogInput) (*models.AuditLog, error) {
 		SourceSystem:         input.SourceSystem,
 		AuthorizationContext: string(authCtxBytes),
 		Metadata:             string(metaBytes),
-		Status:               "RECEIVED", // Status awal sebelum masuk hashing engine [cite: 144]
+		Status:               "RECEIVED",
 	}
 
 	return standardLog, nil

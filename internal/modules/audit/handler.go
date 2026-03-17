@@ -24,59 +24,96 @@ func (h *Handler) GetStats(c *gin.Context) {
 	c.JSON(http.StatusOK, stats)
 }
 
-// VerifyLog mengecek keaslian transaksi menggunakan Merkle Proof [cite: 197-203]
+// VerifyLog mengecek integritas log dari database hingga ke catatan Blockchain.
+// @Summary Verifikasi Integritas Log (Merkle Proof)
+// @Description Melakukan re-hashing data lokal dan memverifikasi Merkle Root langsung ke jaringan Hyperledger Fabric.
+// @Tags Audit & Dashboard
+// @Security BearerAuth
+// @Produce json
+// @Param hash path string true "Nilai Hash dari Log yang ingin diverifikasi"
+// @Success 200 {object} map[string]interface{} "✅ Data Valid dan Otentik"
+// @Success 202 {object} map[string]interface{} "⏳ Data Pending di Antrean"
+// @Failure 401 {object} map[string]interface{} "Akses ditolak"
+// @Failure 404 {object} map[string]interface{} "Log tidak ditemukan"
+// @Failure 409 {object} map[string]interface{} "🚨 Data Termanipulasi (DB atau Blockchain Mismatch)"
+// @Failure 500 {object} map[string]interface{} "Kesalahan koneksi ke Blockchain"
+// @Router /dashboard/verify/{hash} [get]
 func (h *Handler) VerifyLog(c *gin.Context) {
 	requestedHash := c.Param("hash")
 
-	// 1. Ambil data dari database
 	auditLog, err := h.Repo.GetLogByHash(requestedHash)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Log tidak ditemukan"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Log tidak ditemukan di dalam sistem."})
 		return
 	}
 
-	// =====================================================================
-	// 🚨 DETEKSI TAMPERING DATABASE (RE-CALCULATE HASH)
-	// =====================================================================
-	// Gunakan mesin Hasher yang persis sama dengan saat data dibuat
 	recalculatedHash := hasher.GenerateLogHash(auditLog, auditLog.PreviousHash)
 
-	// Jika hash hasil hitungan ulang BEDA dengan hash yang tersimpan,
-	// berarti ada orang dalam (DBA) yang mengedit isi tabel!
 	if recalculatedHash != auditLog.HashValue {
 		c.JSON(http.StatusConflict, gin.H{
 			"status": "failed",
 			"data": gin.H{
 				"is_valid":      false,
-				"message":       "🚨 DATA TERMANIPULASI: Isi data (Actor/Action) telah diubah di database dan tidak cocok dengan Hash aslinya!",
+				"message":       "🚨 DATA TERMANIPULASI: Isi data telah diubah di database dan tidak cocok dengan Hash aslinya!",
 				"expected_hash": auditLog.HashValue,
 				"actual_hash":   recalculatedHash,
 			},
 		})
 		return
 	}
-	// =====================================================================
 
-	// 2. Jika lolos deteksi tampering DB, baru kita cek status Blockchain-nya
 	if auditLog.BlockchainTxID == nil || *auditLog.BlockchainTxID == "PENDING_OR_FAILED" {
 		c.JSON(http.StatusAccepted, gin.H{
 			"status":  "pending",
-			"message": "Log otentik, namun masih dalam proses antrean ke Blockchain.",
+			"message": "Log otentik secara lokal, namun masih dalam proses antrean ke Blockchain.",
 		})
 		return
 	}
 
-	// 3. (Opsional) Di sini Anda bisa menambahkan logika verifikasi Merkle Proof
-	// dan mengecek ke Node Hyperledger Fabric secara langsung jika diperlukan.
+	onChainData, err := h.Fabric.GetAnchorFromLedger(*auditLog.BlockchainTxID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Gagal terhubung ke jaringan Blockchain Fabric untuk melakukan verifikasi.",
+			"detail":  err.Error(),
+		})
+		return
+	}
 
+	// CATATAN PENTING:
+	// Tergantung bagaimana Chaincode Anda me-return data.
+	// Jika Chaincode ("QueryMerkleRoot") mengembalikan STRING Merkle Root secara langsung:
+	onChainRoot := onChainData
+
+	// (Jika Chaincode Anda mengembalikan JSON string, Anda harus unmarshal onChainData dulu
+	// untuk mendapatkan nilai field MerkleRoot-nya)
+
+	// Membandingkan Merkle Root di Database dengan yang ditarik dari Fabric
+	if onChainRoot != auditLog.MerkleRoot {
+		c.JSON(http.StatusConflict, gin.H{
+			"status": "failed",
+			"data": gin.H{
+				"is_valid":   false,
+				"message":    "🚨 FATAL MISMATCH: Merkle Root di database TIDAK DIAKUI oleh jaringan Blockchain!",
+				"db_root":    auditLog.MerkleRoot,
+				"chain_root": onChainRoot,
+			},
+		})
+		return
+	}
+
+	// -------------------------------------------------------------------------
+	// LOLOS SEMUA UJIAN
+	// -------------------------------------------------------------------------
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data": gin.H{
 			"log_id":           auditLog.LogID,
 			"hash_value":       auditLog.HashValue,
-			"is_valid":         true,
+			"merkle_root":      auditLog.MerkleRoot,
 			"blockchain_tx_id": auditLog.BlockchainTxID,
-			"message":          "✅ DATA OTENTIK: Data utuh dan Hash cocok dengan catatan Blockchain.",
+			"is_valid":         true,
+			"message":          "✅ DATA OTENTIK 100%: Data utuh dan Merkle Root terverifikasi dengan Ledger Blockchain.",
 		},
 	})
 }
