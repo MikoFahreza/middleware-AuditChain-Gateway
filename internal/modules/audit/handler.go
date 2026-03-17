@@ -70,25 +70,40 @@ func (h *Handler) VerifyLog(c *gin.Context) {
 		return
 	}
 
+	// -------------------------------------------------------------------------
+	// LAPIS 3: Verifikasi Konsensus ke Hyperledger Fabric (The Ultimate Truth)
+	// -------------------------------------------------------------------------
 	onChainData, err := h.Fabric.GetAnchorFromLedger(*auditLog.BlockchainTxID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
-			"message": "Gagal terhubung ke jaringan Blockchain Fabric untuk melakukan verifikasi.",
+			"message": "Gagal terhubung ke jaringan Blockchain Fabric.",
 			"detail":  err.Error(),
 		})
 		return
 	}
 
-	// CATATAN PENTING:
-	// Tergantung bagaimana Chaincode Anda me-return data.
-	// Jika Chaincode ("QueryMerkleRoot") mengembalikan STRING Merkle Root secara langsung:
-	onChainRoot := onChainData
+	// 1. Buat struct sementara untuk menangkap JSON dari Chaincode
+	// PENTING: Sesuaikan tag `json:"..."` dengan definisi struct AnchorRecord di Chaincode Anda!
+	var fabricResponse struct {
+		MerkleRoot string `json:"merkleRoot"` // Cek apakah di Chaincode Anda namanya "merkleRoot", "merkle_root", atau "MerkleRoot"
+	}
 
-	// (Jika Chaincode Anda mengembalikan JSON string, Anda harus unmarshal onChainData dulu
-	// untuk mendapatkan nilai field MerkleRoot-nya)
+	// 2. Unmarshal JSON string dari Fabric ke struct sementara
+	importJSONErr := json.Unmarshal([]byte(onChainData), &fabricResponse)
+	if importJSONErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Gagal membaca format data dari Blockchain.",
+			"detail":  importJSONErr.Error(),
+		})
+		return
+	}
 
-	// Membandingkan Merkle Root di Database dengan yang ditarik dari Fabric
+	// 3. Ekstrak Root yang sudah bersih dari JSON
+	onChainRoot := fabricResponse.MerkleRoot
+
+	// 4. Bandingkan dengan Database
 	if onChainRoot != auditLog.MerkleRoot {
 		c.JSON(http.StatusConflict, gin.H{
 			"status": "failed",
@@ -96,7 +111,7 @@ func (h *Handler) VerifyLog(c *gin.Context) {
 				"is_valid":   false,
 				"message":    "🚨 FATAL MISMATCH: Merkle Root di database TIDAK DIAKUI oleh jaringan Blockchain!",
 				"db_root":    auditLog.MerkleRoot,
-				"chain_root": onChainRoot,
+				"chain_root": onChainRoot, // Sekarang ini akan mencetak hash-nya saja
 			},
 		})
 		return
