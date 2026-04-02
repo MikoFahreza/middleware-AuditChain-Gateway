@@ -3,9 +3,11 @@ definitions:
   auth.AuthRequest:
     properties:
       password:
+        example: rahasia1234
         minLength: 6
         type: string
       username:
+        example: auditor_senior
         type: string
     required:
     - password
@@ -55,6 +57,88 @@ paths:
       summary: Login Auditor
       tags:
       - Authentication
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Mendaftarkan pengguna baru. Secara otomatis akan diberikan role
+        "Auditor" oleh sistem.
+      parameters:
+      - description: Kredensial Pengguna Baru
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.AuthRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Akun berhasil dibuat
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 'Format input tidak valid (misal: password kurang dari 6 karakter)'
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Username sudah terdaftar di database
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Pendaftaran Akun
+      tags:
+      - Authentication
+  /dashboard/verify/{hash}:
+    get:
+      description: Melakukan re-hashing data lokal dan memverifikasi Merkle Root langsung
+        ke jaringan Hyperledger Fabric.
+      parameters:
+      - description: Nilai Hash dari Log yang ingin diverifikasi
+        in: path
+        name: hash
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ✅ Data Valid dan Otentik
+          schema:
+            additionalProperties: true
+            type: object
+        "202":
+          description: ⏳ Data Pending di Antrean
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Akses ditolak
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Log tidak ditemukan
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: "\U0001F6A8 Data Termanipulasi (DB atau Blockchain Mismatch)"
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Kesalahan koneksi ke Blockchain
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Verifikasi Integritas Log (Merkle Proof)
+      tags:
+      - Audit & Dashboard
 securityDefinitions:
   BearerAuth:
     description: 'Masukkan token dengan format: Bearer {token}'

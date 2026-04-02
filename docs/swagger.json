@@ -61,6 +61,125 @@
                     }
                 }
             }
+        },
+        "/auth/register": {
+            "post": {
+                "description": "Mendaftarkan pengguna baru. Secara otomatis akan diberikan role \"Auditor\" oleh sistem.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Pendaftaran Akun",
+                "parameters": [
+                    {
+                        "description": "Kredensial Pengguna Baru",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.AuthRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Akun berhasil dibuat",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Format input tidak valid (misal: password kurang dari 6 karakter)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Username sudah terdaftar di database",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/dashboard/verify/{hash}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Melakukan re-hashing data lokal dan memverifikasi Merkle Root langsung ke jaringan Hyperledger Fabric.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Audit \u0026 Dashboard"
+                ],
+                "summary": "Verifikasi Integritas Log (Merkle Proof)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Nilai Hash dari Log yang ingin diverifikasi",
+                        "name": "hash",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "✅ Data Valid dan Otentik",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "202": {
+                        "description": "⏳ Data Pending di Antrean",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Akses ditolak",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Log tidak ditemukan",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "🚨 Data Termanipulasi (DB atau Blockchain Mismatch)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Kesalahan koneksi ke Blockchain",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -73,10 +192,12 @@
             "properties": {
                 "password": {
                     "type": "string",
-                    "minLength": 6
+                    "minLength": 6,
+                    "example": "rahasia1234"
                 },
                 "username": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "auditor_senior"
                 }
             }
         }

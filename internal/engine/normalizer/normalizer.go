@@ -9,16 +9,17 @@ import (
 	"github.com/google/uuid"
 )
 
-// RawLogInput adalah struktur data JSON yang kita harapkan dari sistem eksternal (Postman/Klien) [cite: 102, 107-114]
+// RawLogInput adalah representasi data mentah yang dikirim oleh sistem klien
 type RawLogInput struct {
-	LogID                string      `json:"log_id"` // Opsional
-	Actor                string      `json:"actor" binding:"required"`
-	Action               string      `json:"action" binding:"required"`
-	Resource             string      `json:"resource" binding:"required"`
-	Timestamp            string      `json:"timestamp"` // Opsional, pakai waktu sekarang jika kosong
-	SourceSystem         string      `json:"source_system" binding:"required"`
-	AuthorizationContext interface{} `json:"authorization_context"` // Bisa berupa JSON object
-	Metadata             interface{} `json:"metadata"`              // Bisa berupa JSON object
+	LogID                string `json:"log_id" example:"123e4567-e89b-12d3-a456-426614174000"`
+	Actor                string `json:"actor" binding:"required" example:"auditor_utama"`
+	Action               string `json:"action" binding:"required" example:"UPDATE_SALARY"`
+	Resource             string `json:"resource" binding:"required" example:"Table_Employees"`
+	Timestamp            string `json:"timestamp" example:"2024-06-01T15:04:05Z07:00"`
+	SourceSystem         string `json:"source_system" example:"HRIS_App_v2"`
+	AuthorizationContext string `json:"authorization_context" example:"Role: Admin"`
+	// Contoh metadata dinamis
+	Metadata map[string]interface{} `json:"metadata" example:"{\"ip_address\":\"192.168.1.45\", \"browser\":\"Chrome\"}"`
 }
 
 // Normalize mengubah RawLogInput menjadi models.AuditLog yang standar [cite: 120, 141]

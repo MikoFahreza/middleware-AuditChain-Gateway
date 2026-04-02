@@ -21,11 +21,21 @@ type Handler struct {
 }
 
 type AuthRequest struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required,min=6"`
+	Username string `json:"username" binding:"required" example:"auditor_senior"`
+	Password string `json:"password" binding:"required,min=6" example:"rahasia1234"`
 }
 
-// Register untuk mendaftarkan user/auditor baru
+// Register mendaftarkan akun baru ke dalam sistem.
+// @Summary Pendaftaran Akun
+// @Description Mendaftarkan pengguna baru. Secara otomatis akan diberikan role "Auditor" oleh sistem.
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body AuthRequest true "Kredensial Pengguna Baru"
+// @Success 201 {object} map[string]interface{} "Akun berhasil dibuat"
+// @Failure 400 {object} map[string]interface{} "Format input tidak valid (misal: password kurang dari 6 karakter)"
+// @Failure 409 {object} map[string]interface{} "Username sudah terdaftar di database"
+// @Router /auth/register [post]
 func (h *Handler) Register(c *gin.Context) {
 	var req AuthRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
