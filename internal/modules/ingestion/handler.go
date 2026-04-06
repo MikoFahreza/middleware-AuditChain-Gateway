@@ -12,6 +12,16 @@ type Handler struct {
 	Service *Service
 }
 
+// ReceiveLog menerima log mentah dari sistem eksternal.
+// @Summary Ingestion Log Audit
+// @Description Menerima raw log audit dan memasukkannya ke antrean Redis secara asinkron.
+// @Tags Ingestion
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth  <-- 👇 TAMBAHKAN BARIS INI
+// @Param request body normalizer.RawLogInput true "Payload Raw Log"
+// @Success 202 {object} map[string]interface{} "Log diterima"
+// @Router /v1/logs [post]
 func (h *Handler) ReceiveLog(c *gin.Context) {
 	var input normalizer.RawLogInput
 

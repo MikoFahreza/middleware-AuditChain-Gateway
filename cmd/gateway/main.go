@@ -11,6 +11,10 @@
 // @name Authorization
 // @description Masukkan token dengan format: Bearer {token}
 
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name X-API-Key
+
 // @host localhost:3000
 // @BasePath /api
 package main
