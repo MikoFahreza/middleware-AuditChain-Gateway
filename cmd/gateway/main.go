@@ -57,7 +57,7 @@ func startPipelineWorker(db *gorm.DB, fabricSvc *blockchain.FabricService, redis
 		for range ticker.C {
 			// [Langkah 2 & 3 & 4 tetap sama: Proses log yang sudah ada di DB]
 			hashEngine.ProcessPendingLogs()
-			aggEngine.ProcessBatch(5)
+			aggEngine.ProcessBatch(10)
 			if fabricSvc != nil {
 				fabricSvc.AnchorPendingRoots()
 			}
