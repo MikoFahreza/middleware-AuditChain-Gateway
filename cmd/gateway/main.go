@@ -13,7 +13,7 @@
 
 // @securityDefinitions.apikey ApiKeyAuth
 // @in header
-// @name X-API-Key
+// @name api-key
 
 // @host localhost:3000
 // @BasePath /api

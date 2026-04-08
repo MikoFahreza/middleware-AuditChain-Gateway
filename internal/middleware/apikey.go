@@ -20,7 +20,7 @@ func APIKeyAuth() gin.HandlerFunc {
 		}
 
 		// Ambil API Key yang dikirim oleh klien melalui Header
-		clientKey := c.GetHeader("X-API-Key")
+		clientKey := c.GetHeader("api-key")
 
 		// Validasi
 		if clientKey == "" || clientKey != expectedKey {
