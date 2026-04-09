@@ -1,4 +1,4 @@
-package normalizer
+package engine
 
 import (
 	"encoding/json"

@@ -3,7 +3,7 @@ package ingestion
 import (
 	"net/http"
 
-	"go-blockchain-api/internal/engine/normalizer"
+	"go-blockchain-api/internal/engine"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,7 +23,7 @@ type Handler struct {
 // @Success 202 {object} map[string]interface{} "Log diterima"
 // @Router /v1/logs [post]
 func (h *Handler) ReceiveLog(c *gin.Context) {
-	var input normalizer.RawLogInput
+	var input engine.RawLogInput
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Format JSON tidak valid"})

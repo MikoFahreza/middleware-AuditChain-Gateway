@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"go-blockchain-api/internal/engine/normalizer"
+	"go-blockchain-api/internal/engine"
 	"go-blockchain-api/internal/models"
 	"go-blockchain-api/pkg/crypto"
 
@@ -20,9 +20,9 @@ type Service struct {
 }
 
 // ProcessLog melakukan normalisasi, hashing, dan memasukkan ke antrean Redis
-func (s *Service) ProcessLog(input normalizer.RawLogInput) (*models.AuditLog, error) {
+func (s *Service) ProcessLog(input engine.RawLogInput) (*models.AuditLog, error) {
 	// 1. Normalisasi Log
-	standardLog, err := normalizer.Normalize(input)
+	standardLog, err := engine.Normalize(input)
 	if err != nil {
 		return nil, fmt.Errorf("gagal menormalisasi log: %v", err)
 	}

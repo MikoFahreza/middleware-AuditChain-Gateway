@@ -1,4 +1,4 @@
-package hasher
+package engine
 
 import (
 	"fmt"

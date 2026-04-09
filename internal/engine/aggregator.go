@@ -1,4 +1,4 @@
-package aggregator
+package engine
 
 import (
 	"go-blockchain-api/internal/models"

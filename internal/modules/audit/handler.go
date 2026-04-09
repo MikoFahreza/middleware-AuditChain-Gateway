@@ -5,7 +5,7 @@ import (
 
 	"encoding/json"
 	"go-blockchain-api/internal/blockchain"
-	"go-blockchain-api/internal/engine/hasher"
+	"go-blockchain-api/internal/engine"
 
 	"github.com/gin-gonic/gin"
 )
@@ -47,7 +47,7 @@ func (h *Handler) VerifyLog(c *gin.Context) {
 		return
 	}
 
-	recalculatedHash := hasher.GenerateLogHash(auditLog, auditLog.PreviousHash)
+	recalculatedHash := engine.GenerateLogHash(auditLog, auditLog.PreviousHash)
 
 	if recalculatedHash != auditLog.HashValue {
 		c.JSON(http.StatusConflict, gin.H{
