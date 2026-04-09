@@ -33,8 +33,7 @@ import (
 	"go-blockchain-api/internal/api"
 	"go-blockchain-api/internal/blockchain"
 	"go-blockchain-api/internal/config"
-	"go-blockchain-api/internal/engine/aggregator"
-	"go-blockchain-api/internal/engine/hasher"
+	"go-blockchain-api/internal/engine"
 	"go-blockchain-api/internal/models"
 	"go-blockchain-api/internal/modules/audit"
 	"go-blockchain-api/internal/modules/auth"
@@ -45,8 +44,8 @@ import (
 
 // startPipelineWorker adalah mesin yang berjalan di background setiap 10 detik
 func startPipelineWorker(db *gorm.DB, fabricSvc *blockchain.FabricService, redisClient *redis.Client) {
-	hashEngine := &hasher.HasherEngine{DB: db}
-	aggEngine := &aggregator.AggregatorEngine{DB: db}
+	hashEngine := &engine.HasherEngine{DB: db}
+	aggEngine := &engine.AggregatorEngine{DB: db}
 	ctx := context.Background()
 
 	go func() {
