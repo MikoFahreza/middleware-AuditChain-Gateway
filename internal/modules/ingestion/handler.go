@@ -18,18 +18,32 @@ type Handler struct {
 // @Tags Ingestion
 // @Accept json
 // @Produce json
-// @Security ApiKeyAuth  <-- 👇 TAMBAHKAN BARIS INI
-// @Param request body normalizer.RawLogInput true "Payload Raw Log"
+// @Security ApiKeyAuth
+// @Param request body engine.RawLogInput true "Payload Raw Log"
 // @Success 202 {object} map[string]interface{} "Log diterima"
 // @Router /v1/logs [post]
 func (h *Handler) ReceiveLog(c *gin.Context) {
+	// 1. Ambil Client ID dari hasil kerja Middleware APIKeyAuth
+	clientIDVal, exists := c.Get("client_id")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Identitas klien tidak ditemukan oleh sistem"})
+		return
+	}
+	clientID := clientIDVal.(string)
+
 	var input engine.RawLogInput
 
+	// 2. Bind JSON Payload dari Klien
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Format JSON tidak valid"})
 		return
 	}
 
+	// 3. Sisipkan Client ID ke dalam Payload secara paksa
+	// (Klien tidak bisa memalsukan ID mereka dari JSON body)
+	input.ClientID = clientID
+
+	// 4. Proses Log melalui Service Layer
 	standardLog, err := h.Service.ProcessLog(input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

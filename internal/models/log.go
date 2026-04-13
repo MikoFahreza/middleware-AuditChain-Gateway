@@ -2,9 +2,13 @@ package models
 
 import "time"
 
-// 1. AuditLog merepresentasikan struktur metadata transaksi log (Aktivitas 8) [cite: 238-239]
+// 1. AuditLog merepresentasikan struktur metadata transaksi log (Aktivitas 8)
 type AuditLog struct {
-	LogID                string    `gorm:"primaryKey;type:varchar(100)" json:"log_id"`
+	LogID string `gorm:"primaryKey;type:varchar(100)" json:"log_id"`
+
+	// 👇 TAMBAHAN SAAS: FK ke tabel Client untuk isolasi data
+	ClientID string `gorm:"type:varchar(36);not null;index" json:"client_id"`
+
 	Actor                string    `gorm:"type:varchar(100);index" json:"actor"`
 	Action               string    `gorm:"type:varchar(100)" json:"action"`
 	Resource             string    `gorm:"type:varchar(255)" json:"resource"`
@@ -13,15 +17,18 @@ type AuditLog struct {
 	AuthorizationContext string    `gorm:"type:text" json:"authorization_context"`
 	Metadata             string    `gorm:"type:jsonb" json:"metadata"` // Tambahan untuk fleksibilitas JSON
 
+	// 👇 TAMBAHAN SAAS: Bukti Hash Data Aktual (Opsional dari klien)
+	DataHash string `gorm:"type:varchar(256)" json:"data_hash"`
+
 	// Elemen Kriptografi & Blockchain
 	HashValue      string  `gorm:"type:varchar(64);uniqueIndex" json:"hash_value"`
-	PreviousHash   string  `gorm:"type:varchar(64)" json:"previous_hash"`             // Untuk Contextual Hashing rantai [cite: 168]
-	MerkleRoot     string  `gorm:"type:varchar(64);index" json:"merkle_root"`         // Nullable awalnya, diisi oleh Aggregator [cite: 196]
-	BlockchainTxID *string `gorm:"type:varchar(100)" json:"blockchain_tx_id"`         // Diisi setelah sukses ke Fabric [cite: 222-223]
+	PreviousHash   string  `gorm:"type:varchar(64)" json:"previous_hash"`             // Untuk Contextual Hashing rantai
+	MerkleRoot     string  `gorm:"type:varchar(64);index" json:"merkle_root"`         // Nullable awalnya, diisi oleh Aggregator
+	BlockchainTxID *string `gorm:"type:varchar(100)" json:"blockchain_tx_id"`         // Diisi setelah sukses ke Fabric
 	Status         string  `gorm:"type:varchar(20);default:'RECEIVED'" json:"status"` // RECEIVED -> HASHED -> ANCHORED
 }
 
-// 2. MerkleMetadata menyimpan informasi setiap batch yang di-hash ke Root [cite: 241-242]
+// 2. MerkleMetadata menyimpan informasi setiap batch yang di-hash ke Root
 type MerkleMetadata struct {
 	TreeID         uint      `gorm:"primaryKey"`
 	MerkleRoot     string    `gorm:"type:varchar(64);uniqueIndex"`
@@ -29,7 +36,7 @@ type MerkleMetadata struct {
 	BatchSize      int       `gorm:"type:int"`
 }
 
-// 3. MerkleProof menyimpan jalur sibling untuk memverifikasi transaksi tanpa harus punya semua data tree [cite: 243-244]
+// 3. MerkleProof menyimpan jalur sibling untuk memverifikasi transaksi tanpa harus punya semua data tree
 type MerkleProof struct {
 	ID              uint   `gorm:"primaryKey"`
 	TransactionHash string `gorm:"type:varchar(64);index"`

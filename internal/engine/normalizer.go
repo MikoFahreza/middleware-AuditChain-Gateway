@@ -11,6 +11,7 @@ import (
 
 // RawLogInput adalah representasi data mentah yang dikirim oleh sistem klien
 type RawLogInput struct {
+	ClientID             string                 `json:"-"`
 	LogID                string                 `json:"log_id" example:"123e4567-e89b-12d3-a456-426614174000"`
 	Actor                string                 `json:"actor" binding:"required" example:"auditor_utama"`
 	Action               string                 `json:"action" binding:"required" example:"UPDATE_SALARY"`

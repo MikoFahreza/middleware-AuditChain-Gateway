@@ -22,10 +22,11 @@ func ConnectDB() *gorm.DB {
 
 	// Auto-Migrate: Membuat tabel jika belum ada sesuai skema model [cite: 236-244]
 	err = db.AutoMigrate(
+		&models.Client{},
+		&models.User{},
 		&models.AuditLog{},
 		&models.MerkleMetadata{},
 		&models.MerkleProof{},
-		&models.User{},
 	)
 	if err != nil {
 		log.Fatalf("Gagal melakukan migrasi database: %v", err)

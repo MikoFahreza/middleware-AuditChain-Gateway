@@ -4,6 +4,7 @@ import (
 	"go-blockchain-api/internal/middleware"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func RegisterRoutes(routerGroup *gin.RouterGroup, h *Handler) {
@@ -11,7 +12,7 @@ func RegisterRoutes(routerGroup *gin.RouterGroup, h *Handler) {
 	logsRoutes := routerGroup.Group("/logs")
 
 	// 👇 PASANG MIDDLEWARE DI SINI
-	logsRoutes.Use(middleware.APIKeyAuth())
+	logsRoutes.Use(middleware.APIKeyAuth(&gorm.DB{}))
 	{
 		// Rute ini sekarang terlindungi oleh API Key
 		logsRoutes.POST("/", h.ReceiveLog)

@@ -8,7 +8,11 @@ import (
 )
 
 type User struct {
-	ID        string         `gorm:"primaryKey;type:varchar(36)" json:"id"`
+	ID string `gorm:"primaryKey;type:varchar(36)" json:"id"`
+
+	// 👇 TAMBAHAN SAAS: FK ke tabel Client
+	ClientID string `gorm:"type:varchar(36);not null;index" json:"client_id"`
+
 	Username  string         `gorm:"uniqueIndex;not null" json:"username"`
 	Password  string         `gorm:"not null" json:"-"`
 	Role      string         `gorm:"not null;default:'Auditor'" json:"role"`
@@ -18,6 +22,8 @@ type User struct {
 }
 
 func (u *User) BeforeCreate(tx *gorm.DB) (err error) {
-	u.ID = uuid.New().String()
+	if u.ID == "" {
+		u.ID = uuid.New().String()
+	}
 	return
 }
