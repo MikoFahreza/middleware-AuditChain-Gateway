@@ -1,5 +1,5 @@
 # --- Tahap 1: Build (Membuat file executable) ---
-FROM golang:1.20-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Set direktori kerja di dalam container
 WORKDIR /app
