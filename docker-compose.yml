@@ -1,39 +1,38 @@
 version: '3.8'
 
 services:
-  # 1. Kontainer Database PostgreSQL
-  postgres-db:
-    image: postgres:15-alpine
-    container_name: auditchain-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: rahasia
-      POSTGRES_DB: auditchain_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data # Agar data tidak hilang saat docker dimatikan
-
-  # 2. Kontainer Antrean Redis
+  # 1. Container Antrean Redis Lokal
   redis-queue:
     image: redis:7-alpine
     container_name: auditchain-redis
     ports:
       - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - gateway-net
 
-  # 3. Kontainer Aplikasi Go Anda
+  # 2. Container Aplikasi Go (Gateway)
   api-gateway:
     build: .
     container_name: auditchain-api
     ports:
       - "3000:3000"
     depends_on:
-      - postgres-db
       - redis-queue
     environment:
-      # Kita menimpa nilai .env agar Go menunjuk ke nama kontainer, bukan "localhost"
-      - DB_HOST=postgres-db
       - REDIS_HOST=redis-queue:6379
+      - REDIS_PASSWORD=
+    networks:
+      - gateway-net
+      - fabric-net     # Terhubung ke Blockchain Fabric
 
 volumes:
-  pgdata: # Deklarasi volume untuk penyimpanan permanen database
+  redis-data:
+
+networks:
+  gateway-net:
+    driver: bridge
+  fabric-net:
+    external: true     
+    name: fabric_test  # 👈 Menggunakan network Fabric dari PC Lab
