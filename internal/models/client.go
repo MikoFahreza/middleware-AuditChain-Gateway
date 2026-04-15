@@ -13,7 +13,7 @@ type Client struct {
 	CompanyName string `gorm:"type:varchar(100);not null" json:"company_name"`
 
 	// Keamanan API Key
-	APIKeyPrefix string `gorm:"type:varchar(10);uniqueIndex;not null" json:"-"`
+	APIKeyPrefix string `gorm:"type:varchar(20);uniqueIndex;not null" json:"-"`
 	APIKeyHash   string `gorm:"type:varchar(255);not null" json:"-"`
 
 	// Konfigurasi SaaS
