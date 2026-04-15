@@ -37,6 +37,7 @@ import (
 	"go-blockchain-api/internal/models"
 	"go-blockchain-api/internal/modules/audit"
 	"go-blockchain-api/internal/modules/auth"
+	"go-blockchain-api/internal/modules/client"
 	"go-blockchain-api/internal/modules/ingestion"
 
 	"github.com/redis/go-redis/v9"
@@ -134,7 +135,8 @@ func main() {
 	}
 
 	// 6. Pasang Router yang sudah kita pisahkan ke folder api/
-	router := api.SetupRouter(ingestionHandler, auditHandler, authHandler)
+	clientHandler := &client.Handler{DB: db}
+	router := api.SetupRouter(ingestionHandler, auditHandler, authHandler, clientHandler)
 
 	// 7. Jalankan Server API
 	port := os.Getenv("PORT")
