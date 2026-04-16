@@ -1,7 +1,23 @@
 version: '3.8'
 
 services:
-  # 1. Container Antrean Redis Lokal
+  # 1. Container Database PostgreSQL
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: auditchain-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: rahasia
+      POSTGRES_DB: test_blockchain
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - gateway-net
+
+  # 2. Container Redis Lokal
   redis-queue:
     image: redis:7-alpine
     container_name: auditchain-redis
@@ -12,29 +28,32 @@ services:
     networks:
       - gateway-net
 
-  # 2. Container Aplikasi Go (Gateway)
+  # 3. Container Aplikasi Go
   api-gateway:
     build: .
     container_name: auditchain-api
     ports:
       - "8080:8080"
     depends_on:
+      - postgres-db
       - redis-queue
     environment:
       - REDIS_HOST=redis-queue:6379
       - REDIS_PASSWORD=
+      - DB_HOST=postgres-db
     volumes:
       - /home/besu/audit_blockchain/organizations:/home/besu/audit_blockchain/organizations:ro
     networks:
       - gateway-net
-      - fabric-net     # Terhubung ke Blockchain Fabric
+      - fabric-net
 
 volumes:
   redis-data:
+  postgres-data:
 
 networks:
   gateway-net:
     driver: bridge
   fabric-net:
     external: true     
-    name: fabric_test  # 👈 Menggunakan network Fabric dari PC Lab
+    name: fabric_test
