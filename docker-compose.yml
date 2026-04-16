@@ -40,10 +40,11 @@ services:
     environment:
       - REDIS_HOST=redis-queue:6379
       - REDIS_PASSWORD=
-      - DB_HOST=postgres-db
+      - DB_HOST=host.docker.internal
     volumes:
       - /home/besu/audit_blockchain/organizations:/home/besu/audit_blockchain/organizations:ro
     extra_hosts:
+      - "host.docker.internal:host-gateway"
       - "peer0.audit.example.com:192.168.11.94"
       - "orderer.example.com:192.168.11.94"
     networks:
