@@ -16,6 +16,11 @@ services:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - gateway-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   # 2. Container Antrean Redis Lokal
   redis-queue:
@@ -35,8 +40,10 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - postgres-db
-      - redis-queue
+      postgres-db:
+        condition: service_healthy
+      redis-queue:
+        condition: service_started
     environment:
       - REDIS_HOST=redis-queue:6379
       - REDIS_PASSWORD=
