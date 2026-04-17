@@ -44,6 +44,8 @@ services:
         condition: service_healthy
       redis-queue:
         condition: service_started
+    env_file:
+      - .env
     environment:
       - REDIS_HOST=redis-queue:6379
       - REDIS_PASSWORD=
