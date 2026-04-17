@@ -1,73 +1,41 @@
 package client
 
 import (
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"net/http"
 
-	"go-blockchain-api/internal/models"
-
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type Handler struct {
-	DB *gorm.DB
+	Service Service
 }
 
+func NewHandler(service Service) *Handler {
+	return &Handler{Service: service}
+}
+
+// Request Payload
 type CreateClientRequest struct {
-	CompanyName string `json:"company_name" binding:"required" example:"Rumah Sakit Sentosa"`
+	CompanyName string `json:"company_name" binding:"required" example:"PT Karya Bangsa"`
 }
 
-func generateRandomHex(n int) string {
-	b := make([]byte, n)
-	rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-// CreateClient mendaftarkan perusahaan dan membuat API Key
-// @Summary Mendaftarkan Klien SaaS Baru
-// @Description Menambahkan perusahaan dan mencetak API Key rahasia (Hanya muncul 1x)
-// @Tags Admin
-// @Accept json
-// @Produce json
-// @Param request body CreateClientRequest true "Nama Perusahaan"
-// @Success 201 {object} map[string]interface{} "Klien berhasil dibuat"
-// @Router /admin/clients [post]
 func (h *Handler) CreateClient(c *gin.Context) {
-	var input CreateClientRequest
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Nama perusahaan wajib diisi"})
+	var req CreateClientRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Format tidak valid atau company_name belum diisi"})
 		return
 	}
 
-	// 1. Generate API Key (Misal: ak_live_ + 16 karakter hex acak)
-	randomSecret := generateRandomHex(8) // 8 bytes = 16 char hex
-	fullAPIKey := "ak_live_" + randomSecret
-	prefix := "ak_live_" + randomSecret[:5]
-
-	// 2. Hash API Key untuk disimpan di database
-	hash := sha256.Sum256([]byte(fullAPIKey))
-	hashedKey := hex.EncodeToString(hash[:])
-
-	newClient := models.Client{
-		CompanyName:  input.CompanyName,
-		APIKeyPrefix: prefix,
-		APIKeyHash:   hashedKey,
-		Status:       "active",
-	}
-
-	if err := h.DB.Create(&newClient).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan klien ke database"})
+	// Panggil logika bisnis di Service
+	clientData, rawAPIKey, err := h.Service.RegisterClient(req.CompanyName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message":      "Klien berhasil didaftarkan",
-		"client_id":    newClient.ID,
-		"company_name": newClient.CompanyName,
-		"api_key":      fullAPIKey,
-		"warning":      "SIMPAN API KEY INI SEKARANG! Sistem tidak akan menampilkannya lagi.",
+		"message":   "Klien / Perusahaan SaaS berhasil didaftarkan",
+		"client_id": clientData.ID,
+		"api_key":   rawAPIKey, // Penting: Ini hanya ditampilkan sekali!
 	})
 }

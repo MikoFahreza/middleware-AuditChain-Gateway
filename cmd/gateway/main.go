@@ -105,7 +105,7 @@ func main() {
 	db := config.ConnectDB()
 	redisClient := config.ConnectRedis()
 
-	// 3. Inisialisasi koneksi ke Hyperledger Fabric (Satu kali saja)
+	// 3. Tes Inisialisasi koneksi ke Hyperledger Fabric
 	fabricSvc, err := blockchain.InitFabricGateway(db)
 	if err != nil {
 		log.Println("⚠️ PERINGATAN: Gagal terhubung ke Fabric Gateway!")
@@ -121,8 +121,8 @@ func main() {
 
 	// A. Modul Audit
 	auditRepo := audit.NewAuditRepository(db)
-	auditService := audit.NewService(auditRepo, fabricSvc) // 👈 Suntik Fabric dan Repo
-	auditHandler := audit.NewHandler(auditService)         // 👈 Cetak Handler
+	auditService := audit.NewService(auditRepo, fabricSvc)
+	auditHandler := audit.NewHandler(auditService)
 
 	// B. Modul Auth
 	authRepo := auth.NewRepository(db)
@@ -137,8 +137,10 @@ func main() {
 		DB:      db,
 	}
 
-	// D. Modul Client (Masih Fat Handler, belum direfactor)
-	clientHandler := &client.Handler{DB: db}
+	// D. Modul Client
+	clientRepo := client.NewRepository(db)
+	clientService := client.NewService(clientRepo)
+	clientHandler := client.NewHandler(clientService)
 
 	// =========================================================================
 
