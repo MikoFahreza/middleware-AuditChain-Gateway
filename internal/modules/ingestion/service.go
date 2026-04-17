@@ -29,6 +29,8 @@ func (s *Service) ProcessLog(input engine.RawLogInput) (*models.AuditLog, error)
 		return nil, fmt.Errorf("gagal menormalisasi log: %v", err)
 	}
 
+	standardLog.ClientID = input.ClientID
+
 	// 2. Injeksi Anti-Duplicate Hash
 	uniqueID := uuid.New().String()
 	timestampNano := time.Now().UnixNano()
