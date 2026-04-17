@@ -34,8 +34,10 @@ func (s *clientService) RegisterClient(companyName string) (*models.Client, stri
 
 	// 3. Buat objek Client baru
 	newClient := &models.Client{
-		CompanyName: companyName,
-		APIKeyHash:  apiKeyHash,
+		CompanyName:  companyName,
+		APIKeyHash:   apiKeyHash,
+		APIKeyPrefix: rawAPIKey[:10],
+		Status:       "active",
 	}
 
 	// 4. Simpan ke Database
