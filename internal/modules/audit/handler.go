@@ -3,20 +3,19 @@ package audit
 import (
 	"net/http"
 
-	"encoding/json"
-	"go-blockchain-api/internal/blockchain"
-	"go-blockchain-api/internal/engine"
-
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
-	Repo   AuditRepository
-	Fabric *blockchain.FabricService
+	Service Service
+}
+
+func NewHandler(service Service) *Handler {
+	return &Handler{Service: service}
 }
 
 func (h *Handler) GetStats(c *gin.Context) {
-	stats, err := h.Repo.GetDashboardStats()
+	stats, err := h.Service.GetDashboardStats()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil statistik"})
 		return
@@ -25,135 +24,85 @@ func (h *Handler) GetStats(c *gin.Context) {
 }
 
 // VerifyLog mengecek integritas log dari database hingga ke catatan Blockchain.
-// @Summary Verifikasi Integritas Log (Merkle Proof)
-// @Description Melakukan re-hashing data lokal dan memverifikasi Merkle Root langsung ke jaringan Hyperledger Fabric.
-// @Tags Audit & Dashboard
-// @Security BearerAuth
-// @Produce json
-// @Param hash path string true "Nilai Hash dari Log yang ingin diverifikasi"
-// @Success 200 {object} map[string]interface{} "✅ Data Valid dan Otentik"
-// @Success 202 {object} map[string]interface{} "⏳ Data Pending di Antrean"
-// @Failure 401 {object} map[string]interface{} "Akses ditolak"
-// @Failure 404 {object} map[string]interface{} "Log tidak ditemukan"
-// @Failure 409 {object} map[string]interface{} "🚨 Data Termanipulasi (DB atau Blockchain Mismatch)"
-// @Failure 500 {object} map[string]interface{} "Kesalahan koneksi ke Blockchain"
-// @Router /dashboard/verify/{hash} [get]
+// (Komentar Swagger biarkan utuh seperti milik Anda)
 func (h *Handler) VerifyLog(c *gin.Context) {
 	requestedHash := c.Param("hash")
 
-	auditLog, err := h.Repo.GetLogByHash(requestedHash)
+	result, err := h.Service.VerifyLogIntegrity(requestedHash)
+
+	// Tangani error sistem
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Log tidak ditemukan di dalam sistem."})
+		switch err.Error() {
+		case "log_not_found":
+			c.JSON(http.StatusNotFound, gin.H{"error": "Log tidak ditemukan di dalam sistem."})
+		case "fabric_error":
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal terhubung ke jaringan Blockchain Fabric."})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Terjadi kesalahan sistem saat memverifikasi data."})
+		}
 		return
 	}
 
-	recalculatedHash := engine.GenerateLogHash(auditLog, auditLog.PreviousHash)
-
-	if recalculatedHash != auditLog.HashValue {
+	// Tangani hasil logika bisnis (Business Logic)
+	switch result.Status {
+	case "failed_local":
 		c.JSON(http.StatusConflict, gin.H{
 			"status": "failed",
 			"data": gin.H{
-				"is_valid":      false,
-				"message":       "🚨 DATA TERMANIPULASI: Isi data telah diubah di database dan tidak cocok dengan Hash aslinya!",
-				"expected_hash": auditLog.HashValue,
-				"actual_hash":   recalculatedHash,
+				"is_valid":      result.IsValid,
+				"message":       result.Message,
+				"expected_hash": result.ExpectedHash,
+				"actual_hash":   result.ActualHash,
 			},
 		})
-		return
-	}
-
-	if auditLog.BlockchainTxID == nil || *auditLog.BlockchainTxID == "PENDING_OR_FAILED" {
+	case "pending":
 		c.JSON(http.StatusAccepted, gin.H{
 			"status":  "pending",
-			"message": "Log otentik secara lokal, namun masih dalam proses antrean ke Blockchain.",
+			"message": result.Message,
 		})
-		return
-	}
-
-	onChainData, err := h.Fabric.GetAnchorFromLedger(*auditLog.BlockchainTxID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Gagal terhubung ke jaringan Blockchain Fabric.",
-			"detail":  err.Error(),
-		})
-		return
-	}
-
-	var fabricResponse struct {
-		AnchorID      string `json:"anchor_id"`
-		BatchSize     string `json:"batch_size"`
-		MerkleRoot    string `json:"merkle_root"`
-		SignatureNode string `json:"signature_node"`
-		SourceGateway string `json:"source_gateway"`
-		Timestamp     string `json:"timestamp"`
-	}
-
-	// 2. Unmarshal JSON string dari Fabric ke struct yang sudah pasti cocok
-	if err := json.Unmarshal([]byte(onChainData), &fabricResponse); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Gagal membaca format data dari Blockchain.",
-			"detail":  err.Error(),
-		})
-		return
-	}
-
-	onChainRoot := fabricResponse.MerkleRoot
-
-	if onChainRoot != auditLog.MerkleRoot {
+	case "failed_onchain":
 		c.JSON(http.StatusConflict, gin.H{
 			"status": "failed",
 			"data": gin.H{
-				"is_valid":   false,
-				"message":    "🚨 FATAL MISMATCH: Merkle Root di database TIDAK DIAKUI oleh jaringan Blockchain!",
-				"db_root":    auditLog.MerkleRoot,
-				"chain_root": onChainRoot,
+				"is_valid":   result.IsValid,
+				"message":    result.Message,
+				"db_root":    result.DBRoot,
+				"chain_root": result.ChainRoot,
 			},
 		})
-		return
+	case "success":
+		c.JSON(http.StatusOK, gin.H{
+			"status": "success",
+			"data": gin.H{
+				"log_id":           result.LogID,
+				"hash_value":       result.ExpectedHash,
+				"merkle_root":      result.DBRoot,
+				"blockchain_tx_id": result.TxID,
+				"is_valid":         result.IsValid,
+				"message":          result.Message,
+			},
+		})
 	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"data": gin.H{
-			"log_id":           auditLog.LogID,
-			"hash_value":       auditLog.HashValue,
-			"merkle_root":      auditLog.MerkleRoot,
-			"blockchain_tx_id": auditLog.BlockchainTxID,
-			"is_valid":         true,
-			"message":          "✅ DATA OTENTIK 100%: Data utuh dan Merkle Root terverifikasi dengan Ledger Blockchain.",
-		},
-	})
 }
 
 func (h *Handler) GetFabricRecord(c *gin.Context) {
 	anchorID := c.Param("anchor_id")
 
-	// 1. Cek apakah koneksi Fabric tersedia
-	if h.Fabric == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Koneksi ke jaringan Hyperledger Fabric sedang terputus (Bypass Mode)",
-		})
-		return
-	}
-
-	// 2. Tarik data dari Blockchain menggunakan fungsi yang baru kita buat
-	fabricDataString, err := h.Fabric.GetAnchorFromLedger(anchorID)
+	data, err := h.Service.GetFabricRecord(anchorID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error":   "Data tidak ditemukan di dalam Ledger Fabric",
-			"details": err.Error(),
-		})
+		switch err.Error() {
+		case "fabric_bypass":
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Koneksi ke jaringan Hyperledger Fabric sedang terputus (Bypass Mode)"})
+		case "fabric_not_found":
+			c.JSON(http.StatusNotFound, gin.H{"error": "Data tidak ditemukan di dalam Ledger Fabric"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memproses data dari Fabric"})
+		}
 		return
 	}
-
-	// 3. Ubah string JSON dari Fabric kembali menjadi objek agar rapi saat ditampilkan
-	var jsonResponse map[string]interface{}
-	json.Unmarshal([]byte(fabricDataString), &jsonResponse)
 
 	c.JSON(http.StatusOK, gin.H{
 		"source": "Hyperledger Fabric World State",
-		"data":   jsonResponse,
+		"data":   data,
 	})
 }

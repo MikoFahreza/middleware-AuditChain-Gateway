@@ -15,7 +15,7 @@
 // @in header
 // @name api-key
 
-// @host localhost:3000
+// @host localhost:8080
 // @BasePath /api
 package main
 
@@ -29,7 +29,6 @@ import (
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 
-	// Pastikan import ini sesuai dengan nama module di go.mod Anda
 	"go-blockchain-api/internal/api"
 	"go-blockchain-api/internal/blockchain"
 	"go-blockchain-api/internal/config"
@@ -43,7 +42,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// startPipelineWorker adalah mesin yang berjalan di background setiap 10 detik
+// startPipelineWorker adalah mesin yang berjalan di background
 func startPipelineWorker(db *gorm.DB, fabricSvc *blockchain.FabricService, redisClient *redis.Client) {
 	hashEngine := &engine.HasherEngine{DB: db}
 	aggEngine := &engine.AggregatorEngine{DB: db}
@@ -55,7 +54,6 @@ func startPipelineWorker(db *gorm.DB, fabricSvc *blockchain.FabricService, redis
 		defer ticker.Stop()
 
 		for range ticker.C {
-			// [Langkah 2 & 3 & 4 tetap sama: Proses log yang sudah ada di DB]
 			hashEngine.ProcessPendingLogs()
 			aggEngine.ProcessBatch(10)
 			if fabricSvc != nil {
@@ -71,7 +69,6 @@ func startPipelineWorker(db *gorm.DB, fabricSvc *blockchain.FabricService, redis
 	go func() {
 		log.Println("📥 Redis Queue Worker mulai berjalan...")
 		for {
-			// BLPop akan menunggu sampai ada item baru, sehingga worker tidak perlu polling tiap 1 detik.
 			result, err := redisClient.BLPop(ctx, 0, "audit_log_queue").Result()
 			if err != nil {
 				log.Printf("⚠️ Error membaca dari Redis: %v\n", err)
@@ -83,14 +80,12 @@ func startPipelineWorker(db *gorm.DB, fabricSvc *blockchain.FabricService, redis
 				continue
 			}
 
-			// Jika ada data, kembalikan dari JSON menjadi Struct
 			var logData models.AuditLog
 			if err := json.Unmarshal([]byte(result[1]), &logData); err != nil {
 				log.Printf("⚠️ Gagal parse log dari Redis: %v\n", err)
 				continue
 			}
 
-			// Simpan ke PostgreSQL
 			if err := db.Create(&logData).Error; err != nil {
 				log.Printf("⚠️ Gagal memindah log %s dari Redis ke PostgreSQL: %v\n", logData.HashValue, err)
 			} else {
@@ -106,52 +101,58 @@ func main() {
 		godotenv.Load()
 	}
 
-	// 2. Koneksi ke PostgreSQL
+	// 2. Koneksi ke Infrastruktur
 	db := config.ConnectDB()
-
 	redisClient := config.ConnectRedis()
 
-	fabricSvc, _ := blockchain.InitFabricGateway(db)
-
-	// 3. Inisialisasi koneksi ke Hyperledger Fabric
+	// 3. Inisialisasi koneksi ke Hyperledger Fabric (Satu kali saja)
 	fabricSvc, err := blockchain.InitFabricGateway(db)
 	if err != nil {
 		log.Println("⚠️ PERINGATAN: Gagal terhubung ke Fabric Gateway!")
 		log.Printf("🔍 DETAIL ERROR: %v\n", err)
 	}
 
-	// 4. Mulai Background Worker untuk Pipeline dan Redis Queue
+	// 4. Mulai Background Worker
 	startPipelineWorker(db, fabricSvc, redisClient)
 
-	// 5. Inisialisasi Repository & Handler
+	// =========================================================================
+	// 5. INISIALISASI MODULE CLEAN ARCHITECTURE
+	// =========================================================================
 
+	// A. Modul Audit
 	auditRepo := audit.NewAuditRepository(db)
+	auditService := audit.NewService(auditRepo, fabricSvc) // 👈 Suntik Fabric dan Repo
+	auditHandler := audit.NewHandler(auditService)         // 👈 Cetak Handler
 
-	// Auth Module
+	// B. Modul Auth
 	authRepo := auth.NewRepository(db)
 	authService := auth.NewService(authRepo)
 	authHandler := &auth.Handler{Service: authService}
-	ingestionService := &ingestion.Service{Redis: redisClient}
+
+	// C. Modul Ingestion (Antrean)
+	ingestionRepo := ingestion.NewRepository(redisClient)
+	ingestionService := ingestion.NewService(ingestionRepo)
 	ingestionHandler := &ingestion.Handler{
 		Service: ingestionService,
 		DB:      db,
 	}
 
-	auditHandler := &audit.Handler{
-		Repo:   auditRepo,
-		Fabric: fabricSvc,
-	}
-
-	// 6. Pasang Router yang sudah kita pisahkan ke folder api/
+	// D. Modul Client (Masih Fat Handler, belum direfactor)
 	clientHandler := &client.Handler{DB: db}
+
+	// =========================================================================
+
+	// 6. Pasang Router
 	router := api.SetupRouter(ingestionHandler, auditHandler, authHandler, clientHandler)
 
 	// 7. Jalankan Server API
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "3000"
+		port = "8080"
 	}
 
 	log.Printf("🚀 AuditChain Gateway API berjalan di port %s...\n", port)
-	router.Run(":" + port)
+
+	// Gunakan 0.0.0.0 agar API bisa ditembak dari luar Docker (Postman lokal)
+	router.Run("0.0.0.0:" + port)
 }
