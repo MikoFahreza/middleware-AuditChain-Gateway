@@ -120,14 +120,22 @@ func main() {
 		log.Printf("🔍 DETAIL ERROR: %v\n", err)
 	}
 
-	// 4. Nyalakan mesin background worker
+	// 4. Mulai Background Worker untuk Pipeline dan Redis Queue
 	startPipelineWorker(db, fabricSvc, redisClient)
 
 	// 5. Inisialisasi Repository & Handler
+
 	auditRepo := audit.NewAuditRepository(db)
-	authHandler := &auth.Handler{DB: db}
+
+	// Auth Module
+	authRepo := auth.NewRepository(db)
+	authService := auth.NewService(authRepo)
+	authHandler := &auth.Handler{Service: authService}
 	ingestionService := &ingestion.Service{Redis: redisClient}
-	ingestionHandler := &ingestion.Handler{Service: ingestionService}
+	ingestionHandler := &ingestion.Handler{
+		Service: ingestionService,
+		DB:      db,
+	}
 
 	auditHandler := &audit.Handler{
 		Repo:   auditRepo,

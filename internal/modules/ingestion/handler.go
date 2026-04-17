@@ -6,10 +6,13 @@ import (
 	"go-blockchain-api/internal/engine"
 
 	"github.com/gin-gonic/gin"
+
+	"gorm.io/gorm"
 )
 
 type Handler struct {
 	Service *Service
+	DB      *gorm.DB
 }
 
 // ReceiveLog menerima log mentah dari sistem eksternal.
