@@ -20,6 +20,7 @@ type RawLogInput struct {
 	SourceSystem         string                 `json:"source_system" example:"HRIS_App_v2"`
 	AuthorizationContext map[string]interface{} `json:"authorization_context" example:"{\"role\": \"Chief_Physician\", \"session_token\": \"abc-123-xyz\"}"`
 	Metadata             map[string]interface{} `json:"metadata" example:"{\"ip_address\":\"192.168.1.45\", \"browser\":\"Chrome\"}"`
+	DataHash             string                 `json:"data_hash" example:"cf408790..."`
 }
 
 // Normalize mengubah RawLogInput menjadi models.AuditLog yang standar [cite: 120, 141]
@@ -58,6 +59,7 @@ func Normalize(input RawLogInput) (*models.AuditLog, error) {
 		SourceSystem:         input.SourceSystem,
 		AuthorizationContext: string(authCtxBytes),
 		Metadata:             string(metaBytes),
+		DataHash:             input.DataHash,
 		Status:               "RECEIVED",
 	}
 
