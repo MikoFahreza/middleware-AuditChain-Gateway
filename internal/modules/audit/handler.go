@@ -106,3 +106,39 @@ func (h *Handler) GetFabricRecord(c *gin.Context) {
 		"data":   data,
 	})
 }
+
+type VerifyDataRequest struct {
+	Resource string                  `json:"resource" binding:"required" example:"tabel_cuti_pegawai:id:123"`
+	Data     *map[string]interface{} `json:"data"`
+}
+
+// VerifyData menerima payload data aktual dari klien untuk dicek integritasnya
+func (h *Handler) VerifyData(c *gin.Context) {
+	var req VerifyDataRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Format request tidak valid. Pastikan atribut 'resource' diisi."})
+		return
+	}
+
+	// Memanggil service dengan mengirimkan pointer req.Data
+	result, err := h.Service.VerifyDataIntegrity(req.Resource, req.Data)
+	if err != nil {
+		switch err.Error() {
+		case "log_not_found":
+			c.JSON(http.StatusNotFound, gin.H{"error": "Tidak ada rekam jejak audit untuk resource tersebut di sistem."})
+		case "no_data_hash_in_log":
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Log terakhir untuk resource ini tidak memiliki atribut data_hash."})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memverifikasi integritas data."})
+		}
+		return
+	}
+
+	// Mengembalikan respons sesuai status IsValid
+	if result.IsValid {
+		c.JSON(http.StatusOK, result)
+	} else {
+		// Gunakan 409 Conflict jika data terbukti dimanipulasi
+		c.JSON(http.StatusConflict, result)
+	}
+}

@@ -18,5 +18,6 @@ func RegisterRoutes(routerGroup *gin.RouterGroup, h *Handler) {
 		dashAPI.GET("/stats", h.GetStats)
 		dashAPI.GET("/verify/:hash", h.VerifyLog)
 		dashAPI.GET("/fabric/:anchor_id", h.GetFabricRecord)
+		dashAPI.POST("/verify-data", h.VerifyData)
 	}
 }

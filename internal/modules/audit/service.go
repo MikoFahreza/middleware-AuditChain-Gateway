@@ -6,9 +6,10 @@ import (
 
 	"go-blockchain-api/internal/blockchain"
 	"go-blockchain-api/internal/engine"
+	"go-blockchain-api/pkg/crypto"
 )
 
-// VerificationResult adalah struktur laporan hasil pengecekan integritas
+// VerificationResult adalah struktur laporan hasil pengecekan integritas log
 type VerificationResult struct {
 	Status       string
 	Message      string
@@ -21,10 +22,24 @@ type VerificationResult struct {
 	TxID         *string
 }
 
+// DataVerificationResult adalah struktur laporan hasil pengecekan integritas data klien
+type DataVerificationResult struct {
+	Status       string `json:"status"`
+	Message      string `json:"message"`
+	IsValid      bool   `json:"is_valid"`
+	Resource     string `json:"resource"`
+	ExpectedHash string `json:"expected_data_hash"`
+	ActualHash   string `json:"actual_data_hash"`
+	LastLogID    string `json:"last_log_id"`
+}
+
 type Service interface {
 	GetDashboardStats() (map[string]int64, error)
 	VerifyLogIntegrity(hash string) (*VerificationResult, error)
 	GetFabricRecord(anchorID string) (map[string]interface{}, error)
+
+	// Tambahan kontrak baru untuk verifikasi data klien
+	VerifyDataIntegrity(resource string, rawData *map[string]interface{}) (*DataVerificationResult, error)
 }
 
 type auditService struct {
@@ -123,4 +138,64 @@ func (s *auditService) GetFabricRecord(anchorID string) (map[string]interface{},
 	}
 
 	return jsonResponse, nil
+}
+
+// Logika Verifikasi Data Klien berdasarkan Resource dan Data Aktual yang diberikan
+func (s *auditService) VerifyDataIntegrity(resource string, rawData *map[string]interface{}) (*DataVerificationResult, error) {
+	// 1. Dapatkan log terakhir
+	lastLog, err := s.repo.GetLatestLogByResource(resource)
+	if err != nil {
+		return nil, errors.New("log_not_found")
+	}
+
+	// 2. Identifikasi Kondisi Data Aktual
+	var actualHash string
+	isDataEmpty := rawData == nil || len(*rawData) == 0
+
+	if !isDataEmpty {
+		dataBytes, _ := json.Marshal(*rawData)
+		actualHash = crypto.GenerateSHA3_256(string(dataBytes))
+	}
+
+	// 3. Evaluasi Berdasarkan Jenis Aksi (Action) Terakhir
+	isValid := false
+	status := "failed"
+	var msg string
+
+	// Cek apakah aksi terakhir mengandung kata DELETE (bisa DELETE, SOFT_DELETE, HARD_DELETE)
+	isLastActionDelete := lastLog.Action == "DELETE"
+
+	if isLastActionDelete {
+		// LOGIKA UNTUK DELETE
+		if isDataEmpty {
+			isValid = true
+			status = "success"
+			msg = "✅ DATA VALID: Log terakhir adalah DELETE, dan data aktual memang sudah tidak ada di database."
+		} else {
+			msg = "🔴 DATA TERMANIPULASI (GHOST DATA): Log terakhir menyatakan data telah di-DELETE, tetapi data aktual masih ditemukan di database lokal!"
+		}
+	} else {
+		// LOGIKA UNTUK INSERT / UPDATE
+		if isDataEmpty {
+			msg = "🔴 DATA TERMANIPULASI (ILLEGAL DELETION): Log terakhir tidak mencatat adanya penghapusan, tetapi data aktual tiba-tiba HILANG dari database lokal!"
+		} else {
+			if actualHash == lastLog.DataHash {
+				isValid = true
+				status = "success"
+				msg = "✅ DATA VALID: Kondisi data aktual sama persis dengan jejak terakhir di sistem audit."
+			} else {
+				msg = "🔴 DATA TERMANIPULASI (UNAUTHORIZED MODIFICATION): Isi data di database lokal saat ini BERBEDA dengan jejak sah terakhir."
+			}
+		}
+	}
+
+	return &DataVerificationResult{
+		Status:       status,
+		Message:      msg,
+		IsValid:      isValid,
+		Resource:     resource,
+		ExpectedHash: lastLog.DataHash,
+		ActualHash:   actualHash,
+		LastLogID:    lastLog.LogID,
+	}, nil
 }

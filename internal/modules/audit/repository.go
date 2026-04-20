@@ -12,6 +12,7 @@ type AuditRepository interface {
 	GetLogByHash(hash string) (*models.AuditLog, error)
 	GetProofsByHash(hash string) ([]models.MerkleProof, error)
 	GetDashboardStats() (map[string]int64, error)
+	GetLatestLogByResource(resource string) (*models.AuditLog, error)
 }
 
 // auditRepoImpl adalah implementasi nyata dari interface di atas menggunakan GORM
@@ -53,4 +54,12 @@ func (r *auditRepoImpl) GetDashboardStats() (map[string]int64, error) {
 		"anchored_logs": anchoredLogs,
 		"pending_logs":  pendingLogs,
 	}, nil
+}
+
+// GetLatestLogByResource mencari jejak log paling baru untuk suatu spesifik resource/data
+func (r *auditRepoImpl) GetLatestLogByResource(resource string) (*models.AuditLog, error) {
+	var log models.AuditLog
+	// Urutkan berdasarkan waktu terbaru (descending) dan ambil yang pertama
+	err := r.db.Where("resource = ?", resource).Order("timestamp desc").First(&log).Error
+	return &log, err
 }
