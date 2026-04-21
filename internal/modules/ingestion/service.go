@@ -14,7 +14,7 @@ import (
 )
 
 type Service struct {
-	Repo QueueRepository // 👈 Menggunakan antarmuka Repository
+	Repo QueueRepository
 }
 
 func NewService(repo QueueRepository) *Service {
@@ -42,7 +42,6 @@ func (s *Service) ProcessLog(input engine.RawLogInput) (*models.AuditLog, error)
 	logJSON, _ := json.Marshal(standardLog)
 	ctx := context.Background()
 
-	// 👇 Perubahan hanya pada baris ini (Memanggil s.Repo)
 	err = s.Repo.PushToQueue(ctx, "audit_log_queue", logJSON)
 	if err != nil {
 		return nil, fmt.Errorf("gagal memasukkan log ke antrean Redis: %v", err)
