@@ -145,7 +145,7 @@ func (h *Handler) VerifyData(c *gin.Context) {
 
 func (h *Handler) GetRecentLogs(c *gin.Context) {
 
-	logs, err := h.Service.GetRecentLogs(10)
+	logs, err := h.Service.GetRecentLogs(500)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil daftar log terbaru"})
 		return
