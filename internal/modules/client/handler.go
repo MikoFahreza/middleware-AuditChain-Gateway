@@ -14,7 +14,6 @@ func NewHandler(service Service) *Handler {
 	return &Handler{Service: service}
 }
 
-// Request Payload
 type CreateClientRequest struct {
 	CompanyName string `json:"company_name" binding:"required" example:"PT Karya Bangsa"`
 }
@@ -26,7 +25,6 @@ func (h *Handler) CreateClient(c *gin.Context) {
 		return
 	}
 
-	// Panggil logika bisnis di Service
 	clientData, rawAPIKey, err := h.Service.RegisterClient(req.CompanyName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -36,6 +34,6 @@ func (h *Handler) CreateClient(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"message":   "Klien / Perusahaan SaaS berhasil didaftarkan",
 		"client_id": clientData.ID,
-		"api_key":   rawAPIKey, // Penting: Ini hanya ditampilkan sekali!
+		"api_key":   rawAPIKey,
 	})
 }

@@ -6,19 +6,19 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// MerkleProofData menyimpan informasi sibling hash untuk validasi [cite: 199-200]
+// MerkleProofData menyimpan informasi sibling hash untuk validasi
 type MerkleProofData struct {
 	SiblingHash string
 	TreeLevel   int
 }
 
-// MerkleResult menyimpan output akhir agregasi [cite: 193-196]
+// MerkleResult menyimpan output akhir agregasi
 type MerkleResult struct {
 	Root   string
 	Proofs map[string][]MerkleProofData // Mapping antara Hash Transaksi dengan jalur Proof-nya
 }
 
-// hashNodes menggabungkan dua hash menjadi parent hash menggunakan SHA3-256 [cite: 191]
+// hashNodes menggabungkan dua hash menjadi parent hash menggunakan SHA3-256
 func hashNodes(left, right string) string {
 	leftBytes, _ := hex.DecodeString(left)
 	rightBytes, _ := hex.DecodeString(right)
@@ -28,7 +28,7 @@ func hashNodes(left, right string) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// BuildMerkleTree membangun pohon secara berpasangan dan menghasilkan Root [cite: 189-192]
+// BuildMerkleTree membangun pohon secara berpasangan dan menghasilkan Root
 func BuildMerkleTree(leafHashes []string) *MerkleResult {
 	if len(leafHashes) == 0 {
 		return nil
@@ -43,7 +43,7 @@ func BuildMerkleTree(leafHashes []string) *MerkleResult {
 	currentLevel := leafHashes
 	levelIndex := 0
 
-	// Lakukan perulangan hingga hanya tersisa 1 node (Merkle Root) [cite: 192]
+	// Lakukan perulangan hingga hanya tersisa 1 node (Merkle Root)
 	for len(currentLevel) > 1 {
 		var nextLevel []string
 
@@ -58,7 +58,7 @@ func BuildMerkleTree(leafHashes []string) *MerkleResult {
 				right = currentLevel[i+1]
 			}
 
-			// Simpan bukti sibling level dasar untuk keperluan skripsi/audit [cite: 197-198]
+			// Simpan bukti sibling level dasar
 			if levelIndex == 0 {
 				proofs[left] = append(proofs[left], MerkleProofData{SiblingHash: right, TreeLevel: levelIndex})
 				if left != right {
@@ -79,15 +79,15 @@ func BuildMerkleTree(leafHashes []string) *MerkleResult {
 	}
 }
 
-// VerifyMerkleProof merekonstruksi hash dari daun ke akar untuk memverifikasi integritas [cite: 197-198, 203]
+// VerifyMerkleProof merekonstruksi hash dari leaf ke root untuk memverifikasi integritas
 func VerifyMerkleProof(transactionHash string, proofs []string, expectedRoot string) bool {
 	currentHash := transactionHash
 
-	// Rekonstruksi pohon dengan menggabungkan hash saat ini dengan sibling-nya [cite: 198, 200-201]
+	// Rekonstruksi pohon dengan menggabungkan hash saat ini dengan sibling-nya
 	for _, siblingHash := range proofs {
-		// Catatan: Dalam skenario ideal, kita mengurutkan hash secara leksikografis (abjad) sebelum digabung
+		// Catatan: Dalam skenario ideal, hash diurutkan secara leksikografis (abjad) sebelum digabung
 		// agar deterministik tanpa perlu tahu apakah sibling ada di kiri/kanan.
-		// Untuk POC ini, kita coba urutan langsung atau dibalik.
+		// Untuk POC ini, menggunakan urutan langsung atau dibalik.
 
 		leftRight := hashNodes(currentHash, siblingHash)
 		rightLeft := hashNodes(siblingHash, currentHash)
@@ -95,7 +95,7 @@ func VerifyMerkleProof(transactionHash string, proofs []string, expectedRoot str
 		// Karena kita tidak menyimpan posisi (Kiri/Kanan) di DB saat ini, kita cek mana yang cocok
 		// Pada level berikutnya, currentHash akan menjadi hasil gabungan tersebut.
 		// Untuk penyederhanaan verifikasi satu arah di POC:
-		currentHash = leftRight // Default pendekatan kita sebelumnya
+		currentHash = leftRight
 
 		// Jika ini adalah pengecekan level terakhir dan rightLeft yang benar
 		if rightLeft == expectedRoot {
@@ -103,6 +103,6 @@ func VerifyMerkleProof(transactionHash string, proofs []string, expectedRoot str
 		}
 	}
 
-	// Apakah hash yang direkonstruksi sama dengan Merkle Root yang ada di Blockchain/DB? [cite: 179-180, 207-208]
+	// Apakah hash yang direkonstruksi sama dengan Merkle Root yang ada di Blockchain/DB?
 	return currentHash == expectedRoot
 }

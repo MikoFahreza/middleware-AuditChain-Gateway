@@ -23,12 +23,11 @@ func NewService(repo Repository) Service {
 }
 
 func (s *clientService) RegisterClient(companyName string) (*models.Client, string, error) {
-	// 1. Generate Raw API Key (Pertahankan format asli Anda)
-	// Contoh: menggunakan kombinasi "ak_live_" dan UUID acak
+	// 1. Generate Raw API Key
 	randomUUID := uuid.New().String()
 	rawAPIKey := "ak_live_" + hex.EncodeToString([]byte(randomUUID))[:16]
 
-	// 2. Hash API Key untuk keamanan Database (API Key asli tidak boleh disimpan mentah)
+	// 2. Hash API Key untuk keamanan Database
 	hash := sha256.Sum256([]byte(rawAPIKey))
 	apiKeyHash := hex.EncodeToString(hash[:])
 

@@ -63,7 +63,6 @@ func (s *authService) Login(username, password string) (string, error) {
 		return "", errors.New("invalid_credentials")
 	}
 
-	// LOGIKA ASLI ANDA KITA PINDAHKAN KE SINI:
 	claims := jwt.MapClaims{
 		"user_id":   user.ID,
 		"client_id": user.ClientID,

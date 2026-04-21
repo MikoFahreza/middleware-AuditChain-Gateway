@@ -19,6 +19,5 @@ func NewRepository(client *redis.Client) QueueRepository {
 }
 
 func (r *redisRepository) PushToQueue(ctx context.Context, queueName string, data []byte) error {
-	// Menggunakan RPush sesuai logika asli Anda
 	return r.client.RPush(ctx, queueName, data).Err()
 }
