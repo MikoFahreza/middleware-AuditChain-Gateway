@@ -3,8 +3,10 @@ package api
 import (
 	"go-blockchain-api/internal/modules/audit"
 	"go-blockchain-api/internal/modules/auth"
-	"go-blockchain-api/internal/modules/client" // 👈 IMPORT BARU
+	"go-blockchain-api/internal/modules/client"
 	"go-blockchain-api/internal/modules/ingestion"
+
+	"github.com/gin-contrib/cors"
 
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -22,6 +24,13 @@ func SetupRouter(
 ) *gin.Engine {
 
 	router := gin.Default()
+
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowAllOrigins = true // Mengizinkan request dari semua origin (termasuk localhost:3000)
+	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
+	corsConfig.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "api-key"}
+	router.Use(cors.New(corsConfig))
+
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	apiGroup := router.Group("/api")
