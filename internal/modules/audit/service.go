@@ -6,6 +6,7 @@ import (
 
 	"go-blockchain-api/internal/blockchain"
 	"go-blockchain-api/internal/engine"
+	"go-blockchain-api/internal/models"
 	"go-blockchain-api/pkg/crypto"
 )
 
@@ -37,9 +38,8 @@ type Service interface {
 	GetDashboardStats() (map[string]int64, error)
 	VerifyLogIntegrity(hash string) (*VerificationResult, error)
 	GetFabricRecord(anchorID string) (map[string]interface{}, error)
-
-	// Tambahan kontrak baru untuk verifikasi data klien
 	VerifyDataIntegrity(resource string, rawData *map[string]interface{}) (*DataVerificationResult, error)
+	GetRecentLogs(limit int) ([]models.AuditLog, error)
 }
 
 type auditService struct {
@@ -198,4 +198,8 @@ func (s *auditService) VerifyDataIntegrity(resource string, rawData *map[string]
 		ActualHash:   actualHash,
 		LastLogID:    lastLog.LogID,
 	}, nil
+}
+
+func (s *auditService) GetRecentLogs(limit int) ([]models.AuditLog, error) {
+	return s.repo.GetRecentLogs(limit)
 }

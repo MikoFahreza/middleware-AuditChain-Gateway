@@ -16,6 +16,7 @@ func RegisterRoutes(routerGroup *gin.RouterGroup, h *Handler) {
 	dashAPI.Use(middleware.JWTAuth())
 	{
 		dashAPI.GET("/stats", h.GetStats)
+		dashAPI.GET("/logs", h.GetRecentLogs)
 		dashAPI.GET("/verify/:hash", h.VerifyLog)
 		dashAPI.GET("/fabric/:anchor_id", h.GetFabricRecord)
 		dashAPI.POST("/verify-data", h.VerifyData)

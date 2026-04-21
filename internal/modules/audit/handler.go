@@ -142,3 +142,13 @@ func (h *Handler) VerifyData(c *gin.Context) {
 		c.JSON(http.StatusConflict, result)
 	}
 }
+
+func (h *Handler) GetRecentLogs(c *gin.Context) {
+
+	logs, err := h.Service.GetRecentLogs(10)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil daftar log terbaru"})
+		return
+	}
+	c.JSON(http.StatusOK, logs)
+}
