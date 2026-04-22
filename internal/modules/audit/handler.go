@@ -161,3 +161,24 @@ func (h *Handler) GetResourceInventory(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, inventory)
 }
+
+// Tambahkan di bagian bawah file handler.go
+func (h *Handler) VerifyResourceHistory(c *gin.Context) {
+	resource := c.Param("resource")
+
+	result, err := h.Service.VerifyResourceHistory(resource)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Riwayat resource tidak ditemukan."})
+		return
+	}
+
+	if result.IsValid {
+		if result.Status == "pending" {
+			c.JSON(http.StatusAccepted, result)
+		} else {
+			c.JSON(http.StatusOK, result)
+		}
+	} else {
+		c.JSON(http.StatusConflict, result)
+	}
+}

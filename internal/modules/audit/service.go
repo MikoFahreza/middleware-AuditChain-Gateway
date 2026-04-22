@@ -41,6 +41,7 @@ type Service interface {
 	VerifyDataIntegrity(resource string, rawData *map[string]interface{}) (*DataVerificationResult, error)
 	GetRecentLogs(limit int) ([]models.AuditLog, error)
 	GetResourceInventory() ([]models.AuditLog, error)
+	VerifyResourceHistory(resource string) (*VerificationResult, error)
 }
 
 type auditService struct {
@@ -207,4 +208,61 @@ func (s *auditService) GetRecentLogs(limit int) ([]models.AuditLog, error) {
 
 func (s *auditService) GetResourceInventory() ([]models.AuditLog, error) {
 	return s.repo.GetResourceInventory()
+}
+
+func (s *auditService) VerifyResourceHistory(resource string) (*VerificationResult, error) {
+	logs, err := s.repo.GetLogsByResource(resource)
+	if err != nil || len(logs) == 0 {
+		return nil, errors.New("log_not_found")
+	}
+
+	var expectedPrevHash string
+	hasPending := false
+	var lastValidResult *VerificationResult
+
+	// Looping sejarah dari data pertama kali di-INSERT sampai status terbarunya
+	for i, log := range logs {
+		// A. Verifikasi Integritas Baris Individual
+		res, err := s.VerifyLogIntegrity(log.HashValue)
+		if err != nil {
+			return &VerificationResult{
+				Status:  "failed_system",
+				Message: "🚨 Gagal memverifikasi salah satu riwayat masa lalu.",
+				IsValid: false,
+			}, nil
+		}
+
+		if !res.IsValid {
+			res.Message = "🚨 RIWAYAT TERMANIPULASI: Log aksi '" + log.Action + "' di masa lalu telah dirusak! (" + res.Message + ")"
+			return res, nil // Langsung vonis gagal jika ada sejarah yang cacat
+		}
+
+		// B. Verifikasi Rantai Kriptografi (Chain of Custody)
+		if i > 0 && log.PreviousHash != expectedPrevHash {
+			return &VerificationResult{
+				Status:       "failed_chain",
+				Message:      "🚨 RANTAI TERPUTUS: Previous Hash pada log ini tidak cocok dengan Hash log sebelumnya (indikasi penyisipan/penghapusan log)!",
+				IsValid:      false,
+				ExpectedHash: expectedPrevHash,
+				ActualHash:   log.PreviousHash,
+			}, nil
+		}
+		expectedPrevHash = log.HashValue
+
+		if res.Status == "pending" {
+			hasPending = true
+		}
+		lastValidResult = res
+	}
+
+	// C. Kesimpulan Rantai
+	if lastValidResult != nil && hasPending {
+		lastValidResult.Status = "pending"
+		lastValidResult.Message = "✅ RIWAYAT LOKAL AMAN: Namun beberapa log sejarah masih dalam antrean Blockchain."
+	} else if lastValidResult != nil {
+		lastValidResult.Status = "success"
+		lastValidResult.Message = "✅ RIWAYAT OTENTIK 100%: Seluruh rantai transaksi dari awal hingga akhir tidak pernah dikhianati."
+	}
+
+	return lastValidResult, nil
 }
