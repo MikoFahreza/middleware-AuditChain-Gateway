@@ -40,6 +40,7 @@ type Service interface {
 	GetFabricRecord(anchorID string) (map[string]interface{}, error)
 	VerifyDataIntegrity(resource string, rawData *map[string]interface{}) (*DataVerificationResult, error)
 	GetRecentLogs(limit int) ([]models.AuditLog, error)
+	GetResourceInventory() ([]models.AuditLog, error)
 }
 
 type auditService struct {
@@ -202,4 +203,8 @@ func (s *auditService) VerifyDataIntegrity(resource string, rawData *map[string]
 
 func (s *auditService) GetRecentLogs(limit int) ([]models.AuditLog, error) {
 	return s.repo.GetRecentLogs(limit)
+}
+
+func (s *auditService) GetResourceInventory() ([]models.AuditLog, error) {
+	return s.repo.GetResourceInventory()
 }

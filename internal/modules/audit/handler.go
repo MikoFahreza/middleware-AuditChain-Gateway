@@ -152,3 +152,12 @@ func (h *Handler) GetRecentLogs(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, logs)
 }
+
+func (h *Handler) GetResourceInventory(c *gin.Context) {
+	inventory, err := h.Service.GetResourceInventory()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat daftar data"})
+		return
+	}
+	c.JSON(http.StatusOK, inventory)
+}

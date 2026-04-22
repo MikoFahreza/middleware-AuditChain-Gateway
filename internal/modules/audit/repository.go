@@ -14,6 +14,7 @@ type AuditRepository interface {
 	GetDashboardStats() (map[string]int64, error)
 	GetLatestLogByResource(resource string) (*models.AuditLog, error)
 	GetRecentLogs(limit int) ([]models.AuditLog, error)
+	GetResourceInventory() ([]models.AuditLog, error)
 }
 
 // auditRepoImpl adalah implementasi nyata dari interface di atas menggunakan GORM
@@ -69,5 +70,12 @@ func (r *auditRepoImpl) GetRecentLogs(limit int) ([]models.AuditLog, error) {
 	var logs []models.AuditLog
 	// Mengambil log terbaru berdasarkan waktu, dibatasi sesuai parameter limit
 	err := r.db.Order("timestamp desc").Limit(limit).Find(&logs).Error
+	return logs, err
+}
+
+func (r *auditRepoImpl) GetResourceInventory() ([]models.AuditLog, error) {
+	var logs []models.AuditLog
+	// Mengambil baris log terbaru untuk setiap resource unik
+	err := r.db.Raw("SELECT DISTINCT ON (resource) * FROM audit_logs ORDER BY resource, timestamp DESC").Scan(&logs).Error
 	return logs, err
 }
