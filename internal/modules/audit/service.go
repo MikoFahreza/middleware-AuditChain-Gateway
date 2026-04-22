@@ -12,15 +12,15 @@ import (
 
 // VerificationResult adalah struktur laporan hasil pengecekan integritas log
 type VerificationResult struct {
-	Status       string
-	Message      string
-	IsValid      bool
-	ExpectedHash string
-	ActualHash   string
-	DBRoot       string
-	ChainRoot    string
-	LogID        string
-	TxID         *string
+	Status       string  `json:"status"`
+	Message      string  `json:"message"`
+	IsValid      bool    `json:"is_valid"`
+	ExpectedHash string  `json:"expected_hash"`
+	ActualHash   string  `json:"actual_hash"`
+	DBRoot       string  `json:"db_root"`
+	ChainRoot    string  `json:"chain_root"`
+	LogID        string  `json:"log_id"`
+	TxID         *string `json:"blockchain_tx_id,omitempty"`
 }
 
 // DataVerificationResult adalah struktur laporan hasil pengecekan integritas data klien
