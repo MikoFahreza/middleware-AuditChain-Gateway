@@ -6,7 +6,6 @@ import (
 	"go-blockchain-api/internal/engine"
 
 	"github.com/gin-gonic/gin"
-
 	"gorm.io/gorm"
 )
 
@@ -15,14 +14,14 @@ type Handler struct {
 	DB      *gorm.DB
 }
 
-// ReceiveLog menerima log mentah dari sistem eksternal.
+// ReceiveLog menerima log mentah dari sistem eksternal secara dinamis.
 // @Summary Ingestion Log Audit
-// @Description Menerima raw log audit dan memasukkannya ke antrean Redis secara asinkron.
+// @Description Menerima raw log audit (dengan struktur dinamis) dan memasukkannya ke antrean Redis secara asinkron.
 // @Tags Ingestion
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param request body engine.RawLogInput true "Payload Raw Log"
+// @Param request body object true "Payload Raw Log Dinamis dari Klien"
 // @Success 202 {object} map[string]interface{} "Log diterima"
 // @Router /v1/logs [post]
 func (h *Handler) ReceiveLog(c *gin.Context) {
@@ -34,19 +33,39 @@ func (h *Handler) ReceiveLog(c *gin.Context) {
 	}
 	clientID := clientIDVal.(string)
 
-	var input engine.RawLogInput
-
-	// 2. Bind JSON Payload dari Klien
-	if err := c.ShouldBindJSON(&input); err != nil {
+	// 2. Bind JSON Payload dari Klien secara dinamis menggunakan map[string]interface{}
+	var dynamicPayload map[string]interface{}
+	if err := c.ShouldBindJSON(&dynamicPayload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Format JSON tidak valid"})
 		return
 	}
 
-	// 3. Sisipkan Client ID ke dalam Payload secara paksa
+	// 3. Ambil konfigurasi mapping klien dari database
+	var mapping engine.ClientFieldMapping
+	// Menggunakan GORM untuk mengambil mapping dari tabel klien.
+	err := h.DB.Table("clients").
+		Select("actor_field, action_field, resource_field, data_hash_field").
+		Where("client_id = ?", clientID).
+		Scan(&mapping).Error
+
+	if err != nil && err != gorm.ErrRecordNotFound {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil konfigurasi pemetaan klien"})
+		return
+	}
+
+	// 4. Transformasi Dynamic JSON menjadi RawLogInput yang baku
+	input, err := engine.MapDynamicPayload(dynamicPayload, &mapping)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Gagal memetakan struktur data log"})
+		return
+	}
+
+	// 5. Sisipkan Client ID ke dalam Payload secara paksa
 	// (Klien tidak bisa memalsukan ID mereka dari JSON body)
 	input.ClientID = clientID
 
-	// 4. Proses Log melalui Service Layer
+	// 6. Proses Log melalui Service Layer
+	// ProcessLog sekarang menerima 'input' yang sudah dinormalisasi dan di-mapping
 	standardLog, err := h.Service.ProcessLog(input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

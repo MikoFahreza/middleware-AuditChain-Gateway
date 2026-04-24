@@ -3,29 +3,87 @@ package engine
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go-blockchain-api/internal/models"
 	"time"
 
 	"github.com/google/uuid"
 )
 
+// ClientFieldMapping adalah kamus pemetaan field khusus untuk klien tertentu.
+// Ini biasanya diambil dari database berdasarkan ClientID yang sedang login.
+type ClientFieldMapping struct {
+	ActorField    string `json:"actor_field"`     // misal: "user_name"
+	ActionField   string `json:"action_field"`    // misal: "event_type"
+	ResourceField string `json:"resource_field"`  // misal: "table_name"
+	DataHashField string `json:"data_hash_field"` // misal: "signature_hash"
+}
+
 // RawLogInput adalah representasi data mentah yang dikirim oleh sistem klien
 type RawLogInput struct {
 	ClientID             string                 `json:"-"`
-	LogID                string                 `json:"log_id" example:"123e4567-e89b-12d3-a456-426614174000"`
-	Actor                string                 `json:"actor" binding:"required" example:"auditor_utama"`
-	Action               string                 `json:"action" binding:"required" example:"UPDATE_SALARY"`
-	Resource             string                 `json:"resource" binding:"required" example:"Table_Employees"`
-	Timestamp            string                 `json:"timestamp" example:"2024-06-01T15:04:05Z07:00"`
-	SourceSystem         string                 `json:"source_system" example:"HRIS_App_v2"`
-	AuthorizationContext map[string]interface{} `json:"authorization_context" example:"{\"role\": \"Chief_Physician\", \"session_token\": \"abc-123-xyz\"}"`
-	Metadata             map[string]interface{} `json:"metadata" example:"{\"ip_address\":\"192.168.1.45\", \"browser\":\"Chrome\"}"`
-	DataHash             string                 `json:"data_hash" example:"cf408790..."`
+	LogID                string                 `json:"log_id"`
+	Actor                string                 `json:"actor"`
+	Action               string                 `json:"action"`
+	Resource             string                 `json:"resource"`
+	Timestamp            string                 `json:"timestamp"`
+	SourceSystem         string                 `json:"source_system"`
+	AuthorizationContext map[string]interface{} `json:"authorization_context"`
+	Metadata             map[string]interface{} `json:"metadata"`
+	DataHash             string                 `json:"data_hash"`
 }
 
-// Normalize mengubah RawLogInput menjadi models.AuditLog yang standar [cite: 120, 141]
+// 👇 FUNGSI BARU: MapDynamicPayload
+// Fungsi ini menerjemahkan JSON dinamis dari klien menjadi RawLogInput yang baku
+func MapDynamicPayload(dynamicPayload map[string]interface{}, mapping *ClientFieldMapping) (RawLogInput, error) {
+	var input RawLogInput
+
+	// Helper untuk mengambil nilai string dari map dengan aman
+	getString := func(key string) string {
+		if val, ok := dynamicPayload[key]; ok {
+			return fmt.Sprintf("%v", val) // Konversi aman ke string
+		}
+		return ""
+	}
+
+	// 1. Tentukan kunci mana yang akan dibaca (Gunakan mapping jika ada, jika tidak gunakan default)
+	keyActor := "actor"
+	keyAction := "action"
+	keyResource := "resource"
+	keyDataHash := "data_hash"
+
+	if mapping != nil {
+		if mapping.ActorField != "" {
+			keyActor = mapping.ActorField
+		}
+		if mapping.ActionField != "" {
+			keyAction = mapping.ActionField
+		}
+		if mapping.ResourceField != "" {
+			keyResource = mapping.ResourceField
+		}
+		if mapping.DataHashField != "" {
+			keyDataHash = mapping.DataHashField
+		}
+	}
+
+	// 2. Ekstraksi nilai berdasarkan kunci yang sudah ditentukan
+	input.Actor = getString(keyActor)
+	input.Action = getString(keyAction)
+	input.Resource = getString(keyResource)
+	input.DataHash = getString(keyDataHash)
+
+	// Ambil field opsional (bisa di-mapping juga jika Anda butuh)
+	input.LogID = getString("log_id")
+	input.Timestamp = getString("timestamp")
+	input.SourceSystem = getString("source_system")
+
+	return input, nil
+}
+
+// Normalize mengubah RawLogInput menjadi models.AuditLog yang standar (SAMA SEPERTI MILIK ANDA)
 func Normalize(input RawLogInput) (*models.AuditLog, error) {
-	// 1. Validasi manual tambahan jika diperlukan [cite: 142]
+	// 1. Validasi manual tambahan jika diperlukan
 	if input.Actor == "" || input.Action == "" || input.Resource == "" || input.SourceSystem == "" {
 		return nil, errors.New("field wajib (actor, action, resource, source_system) tidak boleh kosong")
 	}
@@ -36,7 +94,7 @@ func Normalize(input RawLogInput) (*models.AuditLog, error) {
 		logID = uuid.New().String()
 	}
 
-	// 3. Normalisasi Timestamp [cite: 142]
+	// 3. Normalisasi Timestamp
 	logTime := time.Now()
 	if input.Timestamp != "" {
 		parsedTime, err := time.Parse(time.RFC3339, input.Timestamp)
@@ -45,11 +103,11 @@ func Normalize(input RawLogInput) (*models.AuditLog, error) {
 		}
 	}
 
-	// 4. Konversi interface{} (JSON Object) menjadi string agar deterministik saat di-hash [cite: 141, 143]
+	// 4. Konversi interface{} (JSON Object) menjadi string agar deterministik saat di-hash
 	authCtxBytes, _ := json.Marshal(input.AuthorizationContext)
 	metaBytes, _ := json.Marshal(input.Metadata)
 
-	// 5. Mapping ke Model Data Internal [cite: 141]
+	// 5. Mapping ke Model Data Internal
 	standardLog := &models.AuditLog{
 		LogID:                logID,
 		Actor:                input.Actor,
