@@ -14,8 +14,29 @@ func NewHandler(service Service) *Handler {
 	return &Handler{Service: service}
 }
 
+func (h *Handler) getClientID(c *gin.Context) (string, bool) {
+	clientIDVal, exists := c.Get("client_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Identitas client tidak ditemukan pada token."})
+		return "", false
+	}
+
+	clientID, ok := clientIDVal.(string)
+	if !ok || clientID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Identitas client pada token tidak valid."})
+		return "", false
+	}
+
+	return clientID, true
+}
+
 func (h *Handler) GetStats(c *gin.Context) {
-	stats, err := h.Service.GetDashboardStats()
+	clientID, ok := h.getClientID(c)
+	if !ok {
+		return
+	}
+
+	stats, err := h.Service.GetDashboardStats(clientID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil statistik"})
 		return
@@ -26,9 +47,14 @@ func (h *Handler) GetStats(c *gin.Context) {
 // VerifyLog mengecek integritas log dari database hingga ke catatan Blockchain.
 // (Komentar Swagger biarkan utuh seperti milik Anda)
 func (h *Handler) VerifyLog(c *gin.Context) {
+	clientID, ok := h.getClientID(c)
+	if !ok {
+		return
+	}
+
 	requestedHash := c.Param("hash")
 
-	result, err := h.Service.VerifyLogIntegrity(requestedHash)
+	result, err := h.Service.VerifyLogIntegrity(requestedHash, clientID)
 
 	// Tangani error sistem
 	if err != nil {
@@ -114,6 +140,11 @@ type VerifyDataRequest struct {
 
 // VerifyData menerima payload data aktual dari klien untuk dicek integritasnya
 func (h *Handler) VerifyData(c *gin.Context) {
+	clientID, ok := h.getClientID(c)
+	if !ok {
+		return
+	}
+
 	var req VerifyDataRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Format request tidak valid. Pastikan atribut 'resource' diisi."})
@@ -121,7 +152,7 @@ func (h *Handler) VerifyData(c *gin.Context) {
 	}
 
 	// Memanggil service dengan mengirimkan pointer req.Data
-	result, err := h.Service.VerifyDataIntegrity(req.Resource, req.Data)
+	result, err := h.Service.VerifyDataIntegrity(req.Resource, clientID, req.Data)
 	if err != nil {
 		switch err.Error() {
 		case "log_not_found":
@@ -144,8 +175,12 @@ func (h *Handler) VerifyData(c *gin.Context) {
 }
 
 func (h *Handler) GetRecentLogs(c *gin.Context) {
+	clientID, ok := h.getClientID(c)
+	if !ok {
+		return
+	}
 
-	logs, err := h.Service.GetRecentLogs(500)
+	logs, err := h.Service.GetRecentLogs(500, clientID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil daftar log terbaru"})
 		return
@@ -154,7 +189,12 @@ func (h *Handler) GetRecentLogs(c *gin.Context) {
 }
 
 func (h *Handler) GetResourceInventory(c *gin.Context) {
-	inventory, err := h.Service.GetResourceInventory()
+	clientID, ok := h.getClientID(c)
+	if !ok {
+		return
+	}
+
+	inventory, err := h.Service.GetResourceInventory(clientID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat daftar data"})
 		return
@@ -164,9 +204,14 @@ func (h *Handler) GetResourceInventory(c *gin.Context) {
 
 // Tambahkan di bagian bawah file handler.go
 func (h *Handler) VerifyResourceHistory(c *gin.Context) {
+	clientID, ok := h.getClientID(c)
+	if !ok {
+		return
+	}
+
 	resource := c.Param("resource")
 
-	result, err := h.Service.VerifyResourceHistory(resource)
+	result, err := h.Service.VerifyResourceHistory(resource, clientID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Riwayat resource tidak ditemukan."})
 		return

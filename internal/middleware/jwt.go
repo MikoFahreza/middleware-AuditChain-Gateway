@@ -48,6 +48,24 @@ func JWTAuth() gin.HandlerFunc {
 			return
 		}
 
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Klaim token tidak valid."})
+			c.Abort()
+			return
+		}
+
+		clientIDVal, ok := claims["client_id"]
+		clientID, okString := clientIDVal.(string)
+		if !ok || !okString || clientID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token tidak memiliki identitas client yang valid."})
+			c.Abort()
+			return
+		}
+
+		// Simpan identitas client agar bisa dipakai layer handler/service.
+		c.Set("client_id", clientID)
+
 		// Jika token sah, persilakan tamu masuk ke ruangan (Handler)
 		c.Next()
 	}

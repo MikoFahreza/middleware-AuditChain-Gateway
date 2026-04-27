@@ -35,13 +35,13 @@ type DataVerificationResult struct {
 }
 
 type Service interface {
-	GetDashboardStats() (map[string]int64, error)
-	VerifyLogIntegrity(hash string) (*VerificationResult, error)
+	GetDashboardStats(clientID string) (map[string]int64, error)
+	VerifyLogIntegrity(hash, clientID string) (*VerificationResult, error)
 	GetFabricRecord(anchorID string) (map[string]interface{}, error)
-	VerifyDataIntegrity(resource string, rawData *map[string]interface{}) (*DataVerificationResult, error)
-	GetRecentLogs(limit int) ([]models.AuditLog, error)
-	GetResourceInventory() ([]models.AuditLog, error)
-	VerifyResourceHistory(resource string) (*VerificationResult, error)
+	VerifyDataIntegrity(resource, clientID string, rawData *map[string]interface{}) (*DataVerificationResult, error)
+	GetRecentLogs(limit int, clientID string) ([]models.AuditLog, error)
+	GetResourceInventory(clientID string) ([]models.AuditLog, error)
+	VerifyResourceHistory(resource, clientID string) (*VerificationResult, error)
 }
 
 type auditService struct {
@@ -56,13 +56,13 @@ func NewService(repo AuditRepository, fabric *blockchain.FabricService) Service 
 	}
 }
 
-func (s *auditService) GetDashboardStats() (map[string]int64, error) {
-	return s.repo.GetDashboardStats()
+func (s *auditService) GetDashboardStats(clientID string) (map[string]int64, error) {
+	return s.repo.GetDashboardStats(clientID)
 }
 
-func (s *auditService) VerifyLogIntegrity(hash string) (*VerificationResult, error) {
+func (s *auditService) VerifyLogIntegrity(hash, clientID string) (*VerificationResult, error) {
 	// 1. Ambil data dari Database
-	auditLog, err := s.repo.GetLogByHash(hash)
+	auditLog, err := s.repo.GetLogByHash(hash, clientID)
 	if err != nil {
 		return nil, errors.New("log_not_found")
 	}
@@ -144,8 +144,8 @@ func (s *auditService) GetFabricRecord(anchorID string) (map[string]interface{},
 
 // Logika Verifikasi Data Klien berdasarkan Resource dan Data Aktual yang diberikan
 // Logika Verifikasi Data Klien berdasarkan Resource dan Data Aktual yang diberikan
-func (s *auditService) VerifyDataIntegrity(resource string, rawData *map[string]interface{}) (*DataVerificationResult, error) {
-	lastLog, err := s.repo.GetLatestLogByResource(resource)
+func (s *auditService) VerifyDataIntegrity(resource, clientID string, rawData *map[string]interface{}) (*DataVerificationResult, error) {
+	lastLog, err := s.repo.GetLatestLogByResource(resource, clientID)
 	if err != nil {
 		return nil, errors.New("log_not_found")
 	}
@@ -225,16 +225,16 @@ func (s *auditService) VerifyDataIntegrity(resource string, rawData *map[string]
 	}, nil
 }
 
-func (s *auditService) GetRecentLogs(limit int) ([]models.AuditLog, error) {
-	return s.repo.GetRecentLogs(limit)
+func (s *auditService) GetRecentLogs(limit int, clientID string) ([]models.AuditLog, error) {
+	return s.repo.GetRecentLogs(limit, clientID)
 }
 
-func (s *auditService) GetResourceInventory() ([]models.AuditLog, error) {
-	return s.repo.GetResourceInventory()
+func (s *auditService) GetResourceInventory(clientID string) ([]models.AuditLog, error) {
+	return s.repo.GetResourceInventory(clientID)
 }
 
-func (s *auditService) VerifyResourceHistory(resource string) (*VerificationResult, error) {
-	logs, err := s.repo.GetLogsByResource(resource)
+func (s *auditService) VerifyResourceHistory(resource, clientID string) (*VerificationResult, error) {
+	logs, err := s.repo.GetLogsByResource(resource, clientID)
 	if err != nil || len(logs) == 0 {
 		return nil, errors.New("log_not_found")
 	}
@@ -246,7 +246,7 @@ func (s *auditService) VerifyResourceHistory(resource string) (*VerificationResu
 	// Looping sejarah dari data pertama kali di-INSERT sampai status terbarunya
 	for i, log := range logs {
 		// A. Verifikasi Integritas Baris Individual
-		res, err := s.VerifyLogIntegrity(log.HashValue)
+		res, err := s.VerifyLogIntegrity(log.HashValue, clientID)
 		if err != nil {
 			return &VerificationResult{
 				Status:  "failed_system",
