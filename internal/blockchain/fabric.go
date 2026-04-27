@@ -26,7 +26,7 @@ type FabricService struct {
 	DB       *gorm.DB
 }
 
-// InitFabricGateway menginisialisasi koneksi ke jaringan Fabric [cite: 215]
+// InitFabricGateway menginisialisasi koneksi ke jaringan Fabric
 func InitFabricGateway(db *gorm.DB) (*FabricService, error) {
 	mspID := os.Getenv("FABRIC_MSP_ID")
 	peerEndpoint := os.Getenv("FABRIC_PEER_ENDPOINT")
@@ -106,14 +106,14 @@ func InitFabricGateway(db *gorm.DB) (*FabricService, error) {
 	}, nil
 }
 
-// AnchorPendingRoots mencari Merkle Root yang belum di-anchor dan mengirimnya ke Blockchain [cite: 221-224]
+// AnchorPendingRoots mencari Merkle Root yang belum di-anchor dan mengirimnya ke Blockchain
 func (f *FabricService) AnchorPendingRoots() error {
 	// Cari Merkle Root yang unik dari log berstatus AGGREGATED
 	var distinctRoots []string
 	f.DB.Model(&models.AuditLog{}).Where("status = ?", "AGGREGATED").Distinct("merkle_root").Pluck("merkle_root", &distinctRoots)
 
 	if len(distinctRoots) == 0 {
-		return nil // Tidak ada Merkle Root baru untuk dikirim
+		return nil
 	}
 
 	for _, root := range distinctRoots {
@@ -123,7 +123,6 @@ func (f *FabricService) AnchorPendingRoots() error {
 			continue
 		}
 
-		// Siapkan payload sesuai spesifikasi skripsi [cite: 218-220]
 		anchorID := uuid.New().String()
 		timestamp := time.Now().Format(time.RFC3339)
 		sourceGateway := "AuditChain_Gateway_Node1"
@@ -131,13 +130,12 @@ func (f *FabricService) AnchorPendingRoots() error {
 
 		log.Printf("[Anchoring] Mengirim Merkle Root %s ke Fabric...", root)
 
-		// Submit Transaksi ke Chaincode (Smart Contract) [cite: 216-217]
-		// Asumsi chaincode function bernama "StoreMerkleRoot"
+		// Submit Transaksi ke Chaincode (Smart Contract)
 		_, err := f.Contract.SubmitTransaction("StoreMerkleRoot", anchorID, root, timestamp, sourceGateway, batchSizeStr, "System_Signature")
 
 		if err != nil {
 			log.Printf("[Anchoring] ❌ Gagal mengirim ke Fabric untuk Root %s: %v\n", root, err)
-			continue // Mekanisme retry sederhana: lewati dan coba lagi di siklus berikutnya [cite: 224]
+			continue // Mekanisme retry sederhana: lewati dan coba lagi di siklus berikutnya
 		}
 
 		// Karena SDK Gateway v1.x mengabstraksi TxID, kita gunakan anchorID sebagai representasi transaksi (atau modifikasi chaincode untuk me-return TxID asli)

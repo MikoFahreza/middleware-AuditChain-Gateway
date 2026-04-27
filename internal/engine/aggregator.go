@@ -12,7 +12,7 @@ type AggregatorEngine struct {
 	DB *gorm.DB
 }
 
-// ProcessBatch mengelompokkan log transaksi yang sudah di-hash dan membuat Merkle Root [cite: 188-189]
+// ProcessBatch mengelompokkan log transaksi yang sudah di-hash dan membuat Merkle Root
 func (a *AggregatorEngine) ProcessBatch(batchSize int) error {
 	var logs []models.AuditLog
 
@@ -30,7 +30,7 @@ func (a *AggregatorEngine) ProcessBatch(batchSize int) error {
 		hashes = append(hashes, l.HashValue)
 	}
 
-	// 2. Bangun Merkle Tree dan dapatkan Root beserta Proof-nya [cite: 189, 197]
+	// 2. Bangun Merkle Tree dan dapatkan Root beserta Proof-nya
 	merkleResult := crypto.BuildMerkleTree(hashes)
 	if merkleResult == nil {
 		return nil
@@ -48,7 +48,7 @@ func (a *AggregatorEngine) ProcessBatch(batchSize int) error {
 			return err
 		}
 
-		// B. Update Audit Logs dan Simpan Merkle Proofs [cite: 245-246]
+		// B. Update Audit Logs dan Simpan Merkle Proofs
 		for _, logItem := range logs {
 			// Update status log menjadi siap dikirim ke blockchain
 			logItem.MerkleRoot = merkleResult.Root
@@ -57,7 +57,7 @@ func (a *AggregatorEngine) ProcessBatch(batchSize int) error {
 				return err
 			}
 
-			// Ambil dan simpan bukti sibling (Merkle Proof) ke database [cite: 201, 243-244]
+			// Ambil dan simpan bukti sibling (Merkle Proof) ke database
 			proofs := merkleResult.Proofs[logItem.HashValue]
 			for _, p := range proofs {
 				mp := models.MerkleProof{

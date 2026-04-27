@@ -20,7 +20,7 @@ func ConnectDB() *gorm.DB {
 		log.Fatalf("Gagal koneksi ke database: %v", err)
 	}
 
-	// Auto-Migrate: Membuat tabel jika belum ada sesuai skema model [cite: 236-244]
+	// Auto-Migrate: Membuat tabel jika belum ada sesuai skema model
 	err = db.AutoMigrate(
 		&models.Client{},
 		&models.User{},

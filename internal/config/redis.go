@@ -14,7 +14,7 @@ func ConnectRedis() *redis.Client {
 	// 1. Ambil nilai konfigurasi dari Environment Variables
 	redisHost := os.Getenv("REDIS_HOST")
 	if redisHost == "" {
-		// Nilai fallback (cadangan) jika file .env kosong / tidak terbaca
+		// Nilai fallback jika file .env kosong / tidak terbaca
 		redisHost = "localhost:6379"
 	}
 

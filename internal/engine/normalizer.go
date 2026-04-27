@@ -10,8 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// ClientFieldMapping adalah kamus pemetaan field khusus untuk klien tertentu.
-// Ini biasanya diambil dari database berdasarkan ClientID yang sedang login.
+// ClientFieldMapping adalah kamus pemetaan field khusus untuk klien tertentu yang diambil dari database berdasarkan ClientID yang sedang login.
 type ClientFieldMapping struct {
 	ActorField    string `json:"actor_field"`    // misal: "user_name"
 	ActionField   string `json:"action_field"`   // misal: "event_type"
@@ -31,7 +30,6 @@ type RawLogInput struct {
 	Metadata             map[string]interface{} `json:"metadata"`
 }
 
-// 👇 FUNGSI BARU: MapDynamicPayload
 // Fungsi ini menerjemahkan JSON dinamis dari klien menjadi RawLogInput yang baku
 func MapDynamicPayload(dynamicPayload map[string]interface{}, mapping *ClientFieldMapping) (RawLogInput, error) {
 	var input RawLogInput
@@ -68,7 +66,7 @@ func MapDynamicPayload(dynamicPayload map[string]interface{}, mapping *ClientFie
 	input.LogID = getString("log_id")
 	input.Timestamp = getString("timestamp")
 
-	// 3. PERBAIKAN: Ekstraksi Metadata yang lebih tangguh
+	// 3. Ekstraksi Metadata
 	if metaVal, exists := dynamicPayload["metadata"]; exists {
 		if metaMap, ok := metaVal.(map[string]interface{}); ok {
 			input.Metadata = metaMap
@@ -85,7 +83,7 @@ func MapDynamicPayload(dynamicPayload map[string]interface{}, mapping *ClientFie
 	return input, nil
 }
 
-// Normalize mengubah RawLogInput menjadi models.AuditLog yang standar (SAMA SEPERTI MILIK ANDA)
+// Normalize mengubah RawLogInput menjadi models.AuditLog yang standar
 func Normalize(input RawLogInput) (*models.AuditLog, error) {
 	// 1. Validasi manual tambahan jika diperlukan
 	if input.Actor == "" || input.Action == "" || input.Resource == "" || input.SourceSystem == "" {
