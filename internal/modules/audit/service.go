@@ -284,7 +284,7 @@ func (s *auditService) VerifyResourceHistory(resource, clientID string) (*Verifi
 		lastValidResult.Message = "✅ RIWAYAT LOKAL AMAN: Namun beberapa log sejarah masih dalam antrean Blockchain."
 	} else if lastValidResult != nil {
 		lastValidResult.Status = "success"
-		lastValidResult.Message = "✅ RIWAYAT OTENTIK 100%: Seluruh rantai transaksi dari awal hingga akhir tidak pernah dikhianati."
+		lastValidResult.Message = "✅ RIWAYAT OTENTIK 100%: Seluruh rantai transaksi dari awal hingga akhir tidak pernah dimanipulasi."
 	}
 
 	return lastValidResult, nil
