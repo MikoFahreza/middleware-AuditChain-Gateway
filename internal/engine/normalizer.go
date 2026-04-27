@@ -16,7 +16,6 @@ type ClientFieldMapping struct {
 	ActorField    string `json:"actor_field"`     // misal: "user_name"
 	ActionField   string `json:"action_field"`    // misal: "event_type"
 	ResourceField string `json:"resource_field"`  // misal: "table_name"
-	DataHashField string `json:"data_hash_field"` // misal: "signature_hash"
 }
 
 // RawLogInput adalah representasi data mentah yang dikirim oleh sistem klien
@@ -30,7 +29,6 @@ type RawLogInput struct {
 	SourceSystem         string                 `json:"source_system"`
 	AuthorizationContext map[string]interface{} `json:"authorization_context"`
 	Metadata             map[string]interface{} `json:"metadata"`
-	DataHash             string                 `json:"data_hash"`
 }
 
 // 👇 FUNGSI BARU: MapDynamicPayload
@@ -50,7 +48,6 @@ func MapDynamicPayload(dynamicPayload map[string]interface{}, mapping *ClientFie
 	keyActor := "actor"
 	keyAction := "action"
 	keyResource := "resource"
-	keyDataHash := "data_hash"
 
 	if mapping != nil {
 		if mapping.ActorField != "" {
@@ -62,16 +59,12 @@ func MapDynamicPayload(dynamicPayload map[string]interface{}, mapping *ClientFie
 		if mapping.ResourceField != "" {
 			keyResource = mapping.ResourceField
 		}
-		if mapping.DataHashField != "" {
-			keyDataHash = mapping.DataHashField
-		}
 	}
 
 	// 2. Ekstraksi nilai berdasarkan kunci yang sudah ditentukan
 	input.Actor = getString(keyActor)
 	input.Action = getString(keyAction)
 	input.Resource = getString(keyResource)
-	input.DataHash = getString(keyDataHash)
 
 	// Ambil field opsional (bisa di-mapping juga jika Anda butuh)
 	input.LogID = getString("log_id")
@@ -117,7 +110,6 @@ func Normalize(input RawLogInput) (*models.AuditLog, error) {
 		SourceSystem:         input.SourceSystem,
 		AuthorizationContext: string(authCtxBytes),
 		Metadata:             string(metaBytes),
-		DataHash:             input.DataHash,
 		Status:               "RECEIVED",
 	}
 

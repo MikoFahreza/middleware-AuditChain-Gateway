@@ -14,7 +14,6 @@ type AuditLog struct {
 	SourceSystem         string    `gorm:"type:varchar(100);index" json:"source_system"`
 	AuthorizationContext string    `gorm:"type:text" json:"authorization_context"`
 	Metadata             string    `gorm:"type:jsonb" json:"metadata"`
-	DataHash             string    `gorm:"type:varchar(256)" json:"data_hash"`
 
 	// Elemen Kriptografi & Blockchain
 	HashValue      string  `gorm:"type:varchar(64);uniqueIndex" json:"hash_value"`

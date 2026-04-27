@@ -25,13 +25,13 @@ type VerificationResult struct {
 
 // DataVerificationResult adalah struktur laporan hasil pengecekan integritas data klien
 type DataVerificationResult struct {
-	Status       string `json:"status"`
-	Message      string `json:"message"`
-	IsValid      bool   `json:"is_valid"`
-	Resource     string `json:"resource"`
-	ExpectedHash string `json:"expected_data_hash"`
-	ActualHash   string `json:"actual_data_hash"`
-	LastLogID    string `json:"last_log_id"`
+	Status       string      `json:"status"`
+	Message      string      `json:"message"`
+	IsValid      bool        `json:"is_valid"`
+	Resource     string      `json:"resource"`
+	ExpectedData interface{} `json:"expected_data"`
+	ActualData   interface{} `json:"actual_data"`
+	LastLogID    string      `json:"last_log_id"`
 }
 
 type Service interface {
@@ -143,6 +143,7 @@ func (s *auditService) GetFabricRecord(anchorID string) (map[string]interface{},
 }
 
 // Logika Verifikasi Data Klien berdasarkan Resource dan Data Aktual yang diberikan
+// Logika Verifikasi Data Klien berdasarkan Resource dan Data Aktual yang diberikan
 func (s *auditService) VerifyDataIntegrity(resource string, rawData *map[string]interface{}) (*DataVerificationResult, error) {
 	// 1. Dapatkan log terakhir
 	lastLog, err := s.repo.GetLatestLogByResource(resource)
@@ -150,21 +151,40 @@ func (s *auditService) VerifyDataIntegrity(resource string, rawData *map[string]
 		return nil, errors.New("log_not_found")
 	}
 
-	// 2. Identifikasi Kondisi Data Aktual
+	// 2. Identifikasi Kondisi Data Aktual (Input dari Auditor di Dashboard)
 	var actualHash string
+	var actualData interface{} = nil // Menampung wujud asli input
 	isDataEmpty := rawData == nil || len(*rawData) == 0
 
 	if !isDataEmpty {
 		dataBytes, _ := json.Marshal(*rawData)
 		actualHash = crypto.GenerateSHA3_256(string(dataBytes))
+		actualData = *rawData // Simpan JSON aslinya
 	}
 
-	// 3. Evaluasi Berdasarkan Jenis Aksi (Action) Terakhir
+	// 3. Ekstraksi Metadata Asli dari Log Terakhir
+	var expectedHash string
+	var expectedData interface{} = nil // Menampung wujud asli dari database
+
+	if lastLog.Metadata != "" && lastLog.Metadata != "{}" && lastLog.Metadata != "null" {
+		// Hash untuk komparasi matematis di latar belakang
+		expectedHash = crypto.GenerateSHA3_256(lastLog.Metadata)
+		
+		// Unmarshal string metadata kembali menjadi JSON object agar rapi di response
+		var parsedMetadata map[string]interface{}
+		if err := json.Unmarshal([]byte(lastLog.Metadata), &parsedMetadata); err == nil {
+			expectedData = parsedMetadata
+		} else {
+			expectedData = lastLog.Metadata // Fallback jika formatnya bukan JSON murni
+		}
+	}
+
+	// 4. Evaluasi Berdasarkan Jenis Aksi (Action) Terakhir
 	isValid := false
 	status := "failed"
 	var msg string
 
-	// Cek apakah aksi terakhir mengandung kata DELETE (bisa DELETE, SOFT_DELETE, HARD_DELETE)
+	// Cek apakah aksi terakhir mengandung kata DELETE
 	isLastActionDelete := lastLog.Action == "DELETE"
 
 	if isLastActionDelete {
@@ -172,21 +192,22 @@ func (s *auditService) VerifyDataIntegrity(resource string, rawData *map[string]
 		if isDataEmpty {
 			isValid = true
 			status = "success"
-			msg = "✅ DATA VALID: Log terakhir adalah DELETE, dan data aktual memang sudah tidak ada di database."
+			msg = "✅ DATA VALID: Log terakhir adalah DELETE, dan data aktual memang kosong."
 		} else {
-			msg = "🔴 DATA TERMANIPULASI (GHOST DATA): Log terakhir menyatakan data telah di-DELETE, tetapi data aktual masih ditemukan di database lokal!"
+			msg = "🔴 DATA TERMANIPULASI (GHOST DATA): Log terakhir menyatakan data telah di-DELETE, tetapi data aktual masih ditemukan!"
 		}
 	} else {
 		// LOGIKA UNTUK INSERT / UPDATE
 		if isDataEmpty {
-			msg = "🔴 DATA TERMANIPULASI (ILLEGAL DELETION): Log terakhir tidak mencatat adanya penghapusan, tetapi data aktual tiba-tiba HILANG dari database lokal!"
+			msg = "🔴 DATA TERMANIPULASI (ILLEGAL DELETION): Log terakhir tidak mencatat adanya penghapusan, tetapi data aktual HILANG!"
 		} else {
-			if actualHash == lastLog.DataHash {
+			// Komparasi TETAP menggunakan HASH agar akurat dan deterministik
+			if actualHash == expectedHash {
 				isValid = true
 				status = "success"
 				msg = "✅ DATA VALID: Kondisi data aktual sama persis dengan jejak terakhir di sistem audit."
 			} else {
-				msg = "🔴 DATA TERMANIPULASI (UNAUTHORIZED MODIFICATION): Isi data di database lokal saat ini BERBEDA dengan jejak sah terakhir."
+				msg = "🔴 DATA TERMANIPULASI (UNAUTHORIZED MODIFICATION): Isi data saat ini BERBEDA dengan jejak sah terakhir."
 			}
 		}
 	}
@@ -196,8 +217,8 @@ func (s *auditService) VerifyDataIntegrity(resource string, rawData *map[string]
 		Message:      msg,
 		IsValid:      isValid,
 		Resource:     resource,
-		ExpectedHash: lastLog.DataHash,
-		ActualHash:   actualHash,
+		ExpectedData: expectedData,
+		ActualData:   actualData, 
 		LastLogID:    lastLog.LogID,
 	}, nil
 }

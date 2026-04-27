@@ -21,6 +21,11 @@ type Client struct {
 	RateLimitPerSec  int    `gorm:"default:50" json:"rate_limit_per_sec"`
 	Status           string `gorm:"type:varchar(20);default:'active'" json:"status"`
 
+	// 👇 TAMBAHAN BARU: Konfigurasi Mapping Field Dinamis
+	ActorField    string `gorm:"type:varchar(100)" json:"actor_field"`
+	ActionField   string `gorm:"type:varchar(100)" json:"action_field"`
+	ResourceField string `gorm:"type:varchar(100)" json:"resource_field"`
+
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
