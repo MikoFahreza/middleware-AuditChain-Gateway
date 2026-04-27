@@ -43,12 +43,11 @@ func MapDynamicPayload(dynamicPayload map[string]interface{}, mapping *ClientFie
 		return ""
 	}
 
-	// Kunci default
+	// 1. Tentukan kunci (Mapping)
 	keyActor := "actor"
 	keyAction := "action"
 	keyResource := "resource"
 
-	// Override jika mapping ada
 	if mapping != nil {
 		if mapping.ActorField != "" {
 			keyActor = mapping.ActorField
@@ -61,19 +60,25 @@ func MapDynamicPayload(dynamicPayload map[string]interface{}, mapping *ClientFie
 		}
 	}
 
+	// 2. Ekstraksi nilai
 	input.Actor = getString(keyActor)
 	input.Action = getString(keyAction)
 	input.Resource = getString(keyResource)
-
-	// Field lainnya
+	input.SourceSystem = getString("source_system")
 	input.LogID = getString("log_id")
 	input.Timestamp = getString("timestamp")
-	input.SourceSystem = getString("source_system")
 
-	// 👇 INI BAGIAN PALING KRUSIAL UNTUK MENANGKAP METADATA 👇
-	if meta, exists := dynamicPayload["metadata"]; exists {
-		if metaMap, ok := meta.(map[string]interface{}); ok {
+	// 3. PERBAIKAN: Ekstraksi Metadata yang lebih tangguh
+	if metaVal, exists := dynamicPayload["metadata"]; exists {
+		if metaMap, ok := metaVal.(map[string]interface{}); ok {
 			input.Metadata = metaMap
+		} else {
+			// Jika metadata bukan map (misal string JSON), coba unmarshal
+			// Ini untuk menangani kasus di mana klien mengirim metadata sebagai string
+			var tempMap map[string]interface{}
+			if err := json.Unmarshal([]byte(fmt.Sprintf("%v", metaVal)), &tempMap); err == nil {
+				input.Metadata = tempMap
+			}
 		}
 	}
 

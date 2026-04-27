@@ -145,37 +145,35 @@ func (s *auditService) GetFabricRecord(anchorID string) (map[string]interface{},
 // Logika Verifikasi Data Klien berdasarkan Resource dan Data Aktual yang diberikan
 // Logika Verifikasi Data Klien berdasarkan Resource dan Data Aktual yang diberikan
 func (s *auditService) VerifyDataIntegrity(resource string, rawData *map[string]interface{}) (*DataVerificationResult, error) {
-	// 1. Dapatkan log terakhir
 	lastLog, err := s.repo.GetLatestLogByResource(resource)
 	if err != nil {
 		return nil, errors.New("log_not_found")
 	}
 
-	// 2. Identifikasi Kondisi Data Aktual (Input dari Auditor di Dashboard)
 	var actualHash string
-	var actualData interface{} = nil // Menampung wujud asli input
+	var actualData interface{} = nil
 	isDataEmpty := rawData == nil || len(*rawData) == 0
 
 	if !isDataEmpty {
 		dataBytes, _ := json.Marshal(*rawData)
 		actualHash = crypto.GenerateSHA3_256(string(dataBytes))
-		actualData = *rawData // Simpan JSON aslinya
+		actualData = *rawData
 	}
 
-	// 3. Ekstraksi Metadata Asli dari Log Terakhir
 	var expectedHash string
-	var expectedData interface{} = nil // Menampung wujud asli dari database
+	var expectedData interface{} = nil
 
-	if lastLog.Metadata != "" && lastLog.Metadata != "{}" && lastLog.Metadata != "null" {
-		// Hash untuk komparasi matematis di latar belakang
+	// PERBAIKAN: Jangan skip jika isinya "null", tapi handle secara elegan
+	if lastLog.Metadata != "" && lastLog.Metadata != "{}" {
+		// Hitung hash dari string mentah di DB untuk verifikasi matematis
 		expectedHash = crypto.GenerateSHA3_256(lastLog.Metadata)
-		
-		// Unmarshal string metadata kembali menjadi JSON object agar rapi di response
+
+		// Unmarshal untuk tampilan User Friendly
 		var parsedMetadata map[string]interface{}
 		if err := json.Unmarshal([]byte(lastLog.Metadata), &parsedMetadata); err == nil {
 			expectedData = parsedMetadata
-		} else {
-			expectedData = lastLog.Metadata // Fallback jika formatnya bukan JSON murni
+		} else if lastLog.Metadata != "null" {
+			expectedData = lastLog.Metadata
 		}
 	}
 
@@ -218,7 +216,7 @@ func (s *auditService) VerifyDataIntegrity(resource string, rawData *map[string]
 		IsValid:      isValid,
 		Resource:     resource,
 		ExpectedData: expectedData,
-		ActualData:   actualData, 
+		ActualData:   actualData,
 		LastLogID:    lastLog.LogID,
 	}, nil
 }
