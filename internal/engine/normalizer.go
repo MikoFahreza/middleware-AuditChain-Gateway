@@ -13,9 +13,9 @@ import (
 // ClientFieldMapping adalah kamus pemetaan field khusus untuk klien tertentu.
 // Ini biasanya diambil dari database berdasarkan ClientID yang sedang login.
 type ClientFieldMapping struct {
-	ActorField    string `json:"actor_field"`     // misal: "user_name"
-	ActionField   string `json:"action_field"`    // misal: "event_type"
-	ResourceField string `json:"resource_field"`  // misal: "table_name"
+	ActorField    string `json:"actor_field"`    // misal: "user_name"
+	ActionField   string `json:"action_field"`   // misal: "event_type"
+	ResourceField string `json:"resource_field"` // misal: "table_name"
 }
 
 // RawLogInput adalah representasi data mentah yang dikirim oleh sistem klien
@@ -36,19 +36,19 @@ type RawLogInput struct {
 func MapDynamicPayload(dynamicPayload map[string]interface{}, mapping *ClientFieldMapping) (RawLogInput, error) {
 	var input RawLogInput
 
-	// Helper untuk mengambil nilai string dari map dengan aman
 	getString := func(key string) string {
 		if val, ok := dynamicPayload[key]; ok {
-			return fmt.Sprintf("%v", val) // Konversi aman ke string
+			return fmt.Sprintf("%v", val)
 		}
 		return ""
 	}
 
-	// 1. Tentukan kunci mana yang akan dibaca (Gunakan mapping jika ada, jika tidak gunakan default)
+	// Kunci default
 	keyActor := "actor"
 	keyAction := "action"
 	keyResource := "resource"
 
+	// Override jika mapping ada
 	if mapping != nil {
 		if mapping.ActorField != "" {
 			keyActor = mapping.ActorField
@@ -61,15 +61,21 @@ func MapDynamicPayload(dynamicPayload map[string]interface{}, mapping *ClientFie
 		}
 	}
 
-	// 2. Ekstraksi nilai berdasarkan kunci yang sudah ditentukan
 	input.Actor = getString(keyActor)
 	input.Action = getString(keyAction)
 	input.Resource = getString(keyResource)
 
-	// Ambil field opsional (bisa di-mapping juga jika Anda butuh)
+	// Field lainnya
 	input.LogID = getString("log_id")
 	input.Timestamp = getString("timestamp")
 	input.SourceSystem = getString("source_system")
+
+	// 👇 INI BAGIAN PALING KRUSIAL UNTUK MENANGKAP METADATA 👇
+	if meta, exists := dynamicPayload["metadata"]; exists {
+		if metaMap, ok := meta.(map[string]interface{}); ok {
+			input.Metadata = metaMap
+		}
+	}
 
 	return input, nil
 }
