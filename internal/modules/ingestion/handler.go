@@ -45,7 +45,7 @@ func (h *Handler) ReceiveLog(c *gin.Context) {
 	// Menggunakan GORM untuk mengambil mapping dari tabel klien.
 	err := h.DB.Table("clients").
 		Select("actor_field, action_field, resource_field, data_hash_field").
-		Where("client_id = ?", clientID).
+		Where("id = ?", clientID).
 		Scan(&mapping).Error
 
 	if err != nil && err != gorm.ErrRecordNotFound {
