@@ -11,7 +11,8 @@ import (
 )
 
 type Service interface {
-	RegisterClient(companyName string) (*models.Client, string, error)
+	// Signature diubah untuk menerima struct CreateClientRequest
+	RegisterClient(req CreateClientRequest) (*models.Client, string, error)
 }
 
 type clientService struct {
@@ -22,7 +23,7 @@ func NewService(repo Repository) Service {
 	return &clientService{repo: repo}
 }
 
-func (s *clientService) RegisterClient(companyName string) (*models.Client, string, error) {
+func (s *clientService) RegisterClient(req CreateClientRequest) (*models.Client, string, error) {
 	// 1. Generate Raw API Key
 	randomUUID := uuid.New().String()
 	rawAPIKey := "ak_live_" + hex.EncodeToString([]byte(randomUUID))[:16]
@@ -31,15 +32,36 @@ func (s *clientService) RegisterClient(companyName string) (*models.Client, stri
 	hash := sha256.Sum256([]byte(rawAPIKey))
 	apiKeyHash := hex.EncodeToString(hash[:])
 
-	// 3. Buat objek Client baru
-	newClient := &models.Client{
-		CompanyName:  companyName,
-		APIKeyHash:   apiKeyHash,
-		APIKeyPrefix: rawAPIKey[:10],
-		Status:       "active",
+	// 3. Konfigurasi Nilai Default (Jika payload dari Klien kosong)
+	tier := req.SubscriptionTier
+	if tier == "" {
+		tier = "basic"
 	}
 
-	// 4. Simpan ke Database
+	rateLimit := req.RateLimitPerSec
+	if rateLimit == 0 {
+		rateLimit = 50
+	}
+
+	status := req.Status
+	if status == "" {
+		status = "active"
+	}
+
+	// 4. Buat objek Client baru beserta field pemetaannya
+	newClient := &models.Client{
+		CompanyName:      req.CompanyName,
+		APIKeyHash:       apiKeyHash,
+		APIKeyPrefix:     rawAPIKey[:10],
+		SubscriptionTier: tier,
+		RateLimitPerSec:  rateLimit,
+		Status:           status,
+		ActorField:       req.ActorField,
+		ActionField:      req.ActionField,
+		ResourceField:    req.ResourceField,
+	}
+
+	// 5. Simpan ke Database
 	if err := s.repo.CreateClient(newClient); err != nil {
 		return nil, "", errors.New("gagal mendaftarkan klien ke database")
 	}
