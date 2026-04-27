@@ -160,20 +160,24 @@ func (s *auditService) VerifyDataIntegrity(resource string, rawData *map[string]
 		actualData = *rawData
 	}
 
+	// 3. Ekstraksi Metadata Asli dari Log Terakhir
 	var expectedHash string
 	var expectedData interface{} = nil
 
-	// PERBAIKAN: Jangan skip jika isinya "null", tapi handle secara elegan
-	if lastLog.Metadata != "" && lastLog.Metadata != "{}" {
-		// Hitung hash dari string mentah di DB untuk verifikasi matematis
-		expectedHash = crypto.GenerateSHA3_256(lastLog.Metadata)
-
-		// Unmarshal untuk tampilan User Friendly
+	if lastLog.Metadata != "" && lastLog.Metadata != "{}" && lastLog.Metadata != "null" {
+		// Unmarshal string metadata dari DB menjadi map terlebih dahulu
 		var parsedMetadata map[string]interface{}
 		if err := json.Unmarshal([]byte(lastLog.Metadata), &parsedMetadata); err == nil {
 			expectedData = parsedMetadata
-		} else if lastLog.Metadata != "null" {
+
+			// 👇 PERBAIKAN: Re-marshal data dari DB agar formatnya (spasi & urutan abjad)
+			// SAMA PERSIS dengan proses marshal pada actual_data di atas.
+			expectedBytes, _ := json.Marshal(parsedMetadata)
+			expectedHash = crypto.GenerateSHA3_256(string(expectedBytes))
+		} else {
+			// Fallback jika formatnya bukan JSON murni
 			expectedData = lastLog.Metadata
+			expectedHash = crypto.GenerateSHA3_256(lastLog.Metadata)
 		}
 	}
 
