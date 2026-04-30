@@ -84,10 +84,14 @@ func MapDynamicPayload(dynamicPayload map[string]interface{}, mapping *ClientFie
 }
 
 // Normalize mengubah RawLogInput menjadi models.AuditLog yang standar
+// Normalize mengubah RawLogInput menjadi models.AuditLog yang standar
 func Normalize(input RawLogInput) (*models.AuditLog, error) {
 	// 1. Validasi manual tambahan jika diperlukan
 	if input.Actor == "" || input.Action == "" || input.Resource == "" || input.SourceSystem == "" {
-		return nil, errors.New("field wajib (actor, action, resource, source_system) tidak boleh kosong")
+		// 👇 Menambahkan detail cetak nilai variabel
+		errMsg := fmt.Sprintf("field wajib kosong! Isi terbaca -> Actor: '%s', Action: '%s', Resource: '%s', SourceSystem: '%s'",
+			input.Actor, input.Action, input.Resource, input.SourceSystem)
+		return nil, errors.New(errMsg)
 	}
 
 	// 2. Generate Log ID jika sistem eksternal tidak memberikannya
