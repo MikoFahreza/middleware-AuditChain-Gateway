@@ -49,7 +49,7 @@ func (h *Handler) ReceiveLog(c *gin.Context) {
 	// 3. OPTIMASI DB: Ambil konfigurasi mapping klien HANYA 1 KALI untuk seluruh batch
 	var mapping engine.ClientFieldMapping
 	err := h.DB.Table("clients").
-		Select("actor_field, action_field, resource_field, data_hash_field").
+		Select("actor_field, action_field, resource_field, data_hash_field, source_system_field").
 		Where("id = ?", clientID).
 		Scan(&mapping).Error
 
