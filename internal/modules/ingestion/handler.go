@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"fmt"
 	"net/http"
 
 	"go-blockchain-api/internal/engine"
@@ -65,8 +66,10 @@ func (h *Handler) ReceiveLog(c *gin.Context) {
 		// Transformasi per item
 		input, err := engine.MapDynamicPayload(payload, &mapping)
 		if err != nil {
+			// 👇 TAMBAHKAN LOG PRINT INI
+			fmt.Printf("❌ [ERROR MAPPING]: %v | Payload: %+v\n", err, payload)
 			errorCount++
-			continue // Lanjut ke log berikutnya jika ada yang formatnya rusak
+			continue
 		}
 
 		// Sisipkan Client ID secara paksa
@@ -75,8 +78,10 @@ func (h *Handler) ReceiveLog(c *gin.Context) {
 		// Masukkan ke Service
 		_, err = h.Service.ProcessLog(input)
 		if err != nil {
+			// 👇 TAMBAHKAN LOG PRINT INI
+			fmt.Printf("❌ [ERROR SERVICE]: %v\n", err)
 			errorCount++
-			continue // Lanjut ke log berikutnya jika gagal diproses Redis/Engine
+			continue
 		}
 
 		successCount++
