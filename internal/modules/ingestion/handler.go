@@ -14,14 +14,14 @@ type Handler struct {
 	DB      *gorm.DB
 }
 
-// ReceiveLog menerima log mentah dari sistem eksternal secara dinamis.
-// @Summary Ingestion Log Audit
-// @Description Menerima raw log audit (dengan struktur dinamis) dan memasukkannya ke antrean Redis secara asinkron.
+// ReceiveLog menerima kumpulan (array) log mentah dari sistem eksternal secara dinamis.
+// @Summary Bulk Ingestion Log Audit
+// @Description Menerima raw log audit dalam bentuk Array dan memasukkannya ke antrean Redis secara asinkron.
 // @Tags Ingestion
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param request body object true "Payload Raw Log Dinamis dari Klien"
+// @Param request body array true "Array Payload Raw Log Dinamis dari Klien"
 // @Success 202 {object} map[string]interface{} "Log diterima"
 // @Router /v1/logs [post]
 func (h *Handler) ReceiveLog(c *gin.Context) {
@@ -33,16 +33,20 @@ func (h *Handler) ReceiveLog(c *gin.Context) {
 	}
 	clientID := clientIDVal.(string)
 
-	// 2. Bind JSON Payload dari Klien secara dinamis menggunakan map[string]interface{}
-	var dynamicPayload map[string]interface{}
-	if err := c.ShouldBindJSON(&dynamicPayload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Format JSON tidak valid"})
+	// 2. BIND ARRAY: Ubah menjadi slice (array) dari map
+	var dynamicPayloads []map[string]interface{}
+	if err := c.ShouldBindJSON(&dynamicPayloads); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Format JSON tidak valid, harus berupa Array Objek (Bulk)"})
 		return
 	}
 
-	// 3. Ambil konfigurasi mapping klien dari database
+	if len(dynamicPayloads) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Array log kosong"})
+		return
+	}
+
+	// 3. OPTIMASI DB: Ambil konfigurasi mapping klien HANYA 1 KALI untuk seluruh batch
 	var mapping engine.ClientFieldMapping
-	// Menggunakan GORM untuk mengambil mapping dari tabel klien.
 	err := h.DB.Table("clients").
 		Select("actor_field, action_field, resource_field, data_hash_field").
 		Where("id = ?", clientID).
@@ -53,27 +57,36 @@ func (h *Handler) ReceiveLog(c *gin.Context) {
 		return
 	}
 
-	// 4. Transformasi Dynamic JSON menjadi RawLogInput yang baku
-	input, err := engine.MapDynamicPayload(dynamicPayload, &mapping)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Gagal memetakan struktur data log"})
-		return
+	// 4. Proses Log melalui Service Layer menggunakan Looping
+	var successCount int
+	var errorCount int
+
+	for _, payload := range dynamicPayloads {
+		// Transformasi per item
+		input, err := engine.MapDynamicPayload(payload, &mapping)
+		if err != nil {
+			errorCount++
+			continue // Lanjut ke log berikutnya jika ada yang formatnya rusak
+		}
+
+		// Sisipkan Client ID secara paksa
+		input.ClientID = clientID
+
+		// Masukkan ke Service
+		_, err = h.Service.ProcessLog(input)
+		if err != nil {
+			errorCount++
+			continue // Lanjut ke log berikutnya jika gagal diproses Redis/Engine
+		}
+
+		successCount++
 	}
 
-	// 5. Sisipkan Client ID ke dalam Payload secara paksa
-	// (Klien tidak bisa memalsukan ID mereka dari JSON body)
-	input.ClientID = clientID
-
-	// 6. Proses Log melalui Service Layer
-	// ProcessLog sekarang menerima 'input' yang sudah dinormalisasi dan di-mapping
-	standardLog, err := h.Service.ProcessLog(input)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
+	// 5. Kembalikan respons rangkuman proses Bulk
 	c.JSON(http.StatusAccepted, gin.H{
-		"message": "Log berhasil masuk antrean Redis dan akan segera diproses",
-		"log_id":  standardLog.LogID,
+		"message":        "Proses bulk ingestion selesai",
+		"total_received": len(dynamicPayloads),
+		"total_success":  successCount,
+		"total_failed":   errorCount,
 	})
 }
