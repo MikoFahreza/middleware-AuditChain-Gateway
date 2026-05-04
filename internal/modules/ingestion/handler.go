@@ -49,7 +49,7 @@ func (h *Handler) ReceiveLog(c *gin.Context) {
 	// 3. KEMBALIKAN QUERY KE ASAL (Hapus source_system_field yang bikin error)
 	var mapping engine.ClientFieldMapping
 	err := h.DB.Table("clients").
-		Select("actor_field, action_field, resource_field, data_hash_field").
+		Select("actor_field, action_field, resource_field").
 		Where("id = ?", clientID).
 		Scan(&mapping).Error
 
