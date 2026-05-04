@@ -64,7 +64,7 @@ func (h *Handler) ReceiveLog(c *gin.Context) {
 
 	for _, payload := range dynamicPayloads {
 		// Transformasi dinamis (hanya untuk actor, action, resource)
-		input, err := engine.MapDynamicPayload(payload, nil)
+		input, err := engine.MapDynamicPayload(payload, &mapping)
 		if err != nil {
 			fmt.Printf("❌ [ERROR MAPPING]: %v\n", err)
 			errorCount++
