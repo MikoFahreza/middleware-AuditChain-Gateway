@@ -27,6 +27,7 @@ func (s *Service) ProcessLog(input engine.RawLogInput) (*models.AuditLog, error)
 
 	// Injeksi ClientID dari JWT/API Key
 	standardLog.ClientID = input.ClientID
+	standardLog.HashValue = "PENDING-" + standardLog.LogID
 
 	logJSON, _ := json.Marshal(standardLog)
 	ctx := context.Background()
