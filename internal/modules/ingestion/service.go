@@ -4,13 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"go-blockchain-api/internal/engine"
 	"go-blockchain-api/internal/models"
-	"go-blockchain-api/pkg/crypto"
-
-	"github.com/google/uuid"
 )
 
 type Service struct {
@@ -21,24 +17,17 @@ func NewService(repo QueueRepository) *Service {
 	return &Service{Repo: repo}
 }
 
-// ProcessLog melakukan normalisasi, hashing, dan memasukkan ke antrean
+// ProcessLog melakukan normalisasi data dan memasukkannya ke antrean Redis secara instan
 func (s *Service) ProcessLog(input engine.RawLogInput) (*models.AuditLog, error) {
-	// 1. Normalisasi Log
+	// 1. Normalisasi Log (Secara otomatis memberikan status "RECEIVED")
 	standardLog, err := engine.Normalize(input)
 	if err != nil {
 		return nil, fmt.Errorf("gagal menormalisasi log: %v", err)
 	}
 
+	// Injeksi ClientID dari JWT/API Key
 	standardLog.ClientID = input.ClientID
 
-	// 2. Injeksi Anti-Duplicate Hash
-	uniqueID := uuid.New().String()
-	timestampNano := time.Now().UnixNano()
-	uniqueRawString := fmt.Sprintf("%s-%s-%d", standardLog.HashValue, uniqueID, timestampNano)
-
-	standardLog.HashValue = crypto.GenerateSHA3_256(uniqueRawString)
-
-	// 3. Simpan ke Antrean melalui Repository
 	logJSON, _ := json.Marshal(standardLog)
 	ctx := context.Background()
 
